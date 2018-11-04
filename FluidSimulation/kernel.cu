@@ -6,11 +6,10 @@
 #include <stdio.h>
 #include <iostream>
 
+#include <GL/glew.h>
+#include <GL/freeglut.h>
 
 // Kernels
-
-
-
 __constant__ float dt = 0.1f;
 
 __global__
@@ -19,6 +18,7 @@ void resetSimulationCUDA(const int gridResolution,
 						 float* pressureBuffer,
 						 float4* densityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x < gridResolution && id.y < gridResolution)
@@ -97,6 +97,7 @@ void advection(const int gridResolution,
 			   float2* inputVelocityBuffer,
 			   float2* outputVelocityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -123,6 +124,7 @@ void advectionDensity(const int gridResolution,
 					  float4* inputDensityBuffer,
 					  float4* outputDensityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -140,11 +142,17 @@ void advectionDensity(const int gridResolution,
 	}
 }
 
+__global__ void myprint()
+{
+	printf("[%d, %d]\n", blockIdx.y*gridDim.x + blockIdx.x, blockIdx.y*gridDim.y + blockIdx.y);
+}
+
 __global__
 void diffusion(const int gridResolution,
 			   float2* inputVelocityBuffer,
 			   float2* outputVelocityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	float viscousity = 0.01f;
@@ -173,6 +181,7 @@ __global__
 void vorticity(const int gridResolution, float2* velocityBuffer,
 			   float* vorticityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -195,6 +204,7 @@ __global__
 void addVorticity(const int gridResolution, float* vorticityBuffer,
 				  float2* velocityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	const float scale = 0.2f;
@@ -222,6 +232,7 @@ __global__
 void divergence(const int gridResolution, float2* velocityBuffer,
 				float* divergenceBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -246,6 +257,7 @@ void pressureJacobi(const int gridResolution,
 					float* outputPressureBuffer,
 					float* divergenceBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -279,6 +291,7 @@ void projectionCUDA(const int gridResolution,
 					float* pressureBuffer,
 					float2* outputVelocityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x > 0 && id.x < gridResolution - 1 &&
@@ -303,10 +316,11 @@ void projectionCUDA(const int gridResolution,
 }
 
 __global__
-void addForce(const float x, const float y, const float2 force,
+void addForceCUDA(const float x, const float y, const float2 force,
 			  const int gridResolution, float2* velocityBuffer,
 			  const float4 density, float4* densityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	float dx = ((float)id.x / (float)gridResolution) - x;
@@ -320,6 +334,22 @@ void addForce(const float x, const float y, const float2 force,
 	densityBuffer[id.x + id.y * gridResolution] += c * density;
 }
 
+//__global__
+//void createForce()
+//{
+//	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
+//
+//	float dx = ((float)id.x / (float)gridResolution) - x;
+//	float dy = ((float)id.y / (float)gridResolution) - y;
+//
+//	float radius = 0.001f;
+//
+//	float c = exp(-(dx * dx + dy * dy) / radius) * dt;
+//
+//	velocityBuffer[id.x + id.y * gridResolution] += c * force;
+//}
+
+
 // *************
 // Visualization
 // *************
@@ -329,6 +359,10 @@ void visualizationDensity(const int width, const int height, float4* visualizati
 						  const int gridResolution, float4* densityBuffer)
 {
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
+	int blocki; blocki = blockIdx.x;
+	int blockd; blockd = blockDim.x;
+	int thid; thid = threadIdx.x;
+	//printf("blockid: %d, blockdim: %d, thidx: %d \n", blocki, blockd, thid);
 
 	if(id.x < width && id.y < height)
 	{
@@ -341,6 +375,7 @@ __global__
 void visualizationVelocity(const int width, const int height, float4* visualizationBuffer,
 						   const int gridResolution, float2* velocityBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x < width && id.y < height)
@@ -355,6 +390,7 @@ __global__
 void visualizationPressure(const int width, const int height, float4* visualizationBuffer,
 						   const int gridResolution, float* pressureBuffer)
 {
+	
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
 
 	if(id.x < width && id.y < height)
@@ -370,7 +406,8 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 
 // simulation
 int gridResolution = 512;
-dim3 threadsPerBlock(gridResolution, gridResolution);
+dim3 threadsPerBlock(8, 8);
+dim3 numBlocks(gridResolution / threadsPerBlock.x, gridResolution / threadsPerBlock.y);
 
 int inputVelocityBuffer = 0;
 float2* velocityBuffer[2];
@@ -432,7 +469,7 @@ void initBuffers()
 
 void resetSimulation()
 {
-	resetSimulationCUDA<<<1, threadsPerBlock>>>(gridResolution,
+	resetSimulationCUDA<<<numBlocks, threadsPerBlock>>>(gridResolution,
 													 velocityBuffer[inputVelocityBuffer],
 													 pressureBuffer[inputPressureBuffer],
 													 densityBuffer[inputDensityBuffer]);
@@ -440,7 +477,7 @@ void resetSimulation()
 
 void resetPressure()
 {
-	resetSimulationCUDA << <1, threadsPerBlock >> > (gridResolution,
+	resetSimulationCUDA <<<numBlocks, threadsPerBlock >> > (gridResolution,
 													 velocityBuffer[(inputVelocityBuffer + 1) % 2],
 													 pressureBuffer[inputPressureBuffer],
 													 densityBuffer[(inputDensityBuffer + 1) % 2]);
@@ -449,7 +486,7 @@ void resetPressure()
 void simulateAdvection()
 {
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	advection << <1, threadsPerBlock >> > (gridResolution,
+	advection<<<numBlocks, threadsPerBlock >>>(gridResolution,
 										   velocityBuffer[inputVelocityBuffer],
 										   velocityBuffer[nextBufferIndex]);
 	inputVelocityBuffer = nextBufferIndex;
@@ -457,11 +494,11 @@ void simulateAdvection()
 
 void simulateVorticity()
 {
-	vorticity << <1, threadsPerBlock >> > (gridResolution,
+	vorticity <<<numBlocks, threadsPerBlock >> > (gridResolution,
 										   velocityBuffer[inputVelocityBuffer],
 										   vorticityBuffer);
 
-	addVorticity << <1, threadsPerBlock >> > (gridResolution,
+	addVorticity <<<numBlocks, threadsPerBlock >> > (gridResolution,
 											  vorticityBuffer,
 											  velocityBuffer[inputVelocityBuffer]);
 }
@@ -471,7 +508,7 @@ void simulateDiffusion()
 	for(int i = 0; i < 10; ++i)
 	{
 		int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-		diffusion << <1, threadsPerBlock >> > (gridResolution,
+		diffusion <<<numBlocks, threadsPerBlock >> > (gridResolution,
 											   velocityBuffer[inputVelocityBuffer],
 											   velocityBuffer[nextBufferIndex]);
 		inputVelocityBuffer = nextBufferIndex;
@@ -480,7 +517,7 @@ void simulateDiffusion()
 
 void projection()
 {
-	divergence << <1, threadsPerBlock >> > (gridResolution,
+	divergence <<<numBlocks, threadsPerBlock >> > (gridResolution,
 											velocityBuffer[inputVelocityBuffer],
 											divergenceBuffer);
 
@@ -489,7 +526,7 @@ void projection()
 	for(int i = 0; i < 10; ++i)
 	{
 		int nextBufferIndex = (inputPressureBuffer + 1) % 2;
-		pressureJacobi << <1, threadsPerBlock >> > (gridResolution,
+		pressureJacobi <<<numBlocks, threadsPerBlock >> > (gridResolution,
 											   pressureBuffer[inputPressureBuffer],
 											   pressureBuffer[nextBufferIndex],
 											   divergenceBuffer);
@@ -497,7 +534,7 @@ void projection()
 	}
 
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	projectionCUDA << <1, threadsPerBlock >> > (gridResolution,
+	projectionCUDA <<<numBlocks, threadsPerBlock >> > (gridResolution,
 												velocityBuffer[inputVelocityBuffer],
 												pressureBuffer[inputPressureBuffer],
 												velocityBuffer[nextBufferIndex]);
@@ -507,7 +544,7 @@ void projection()
 void simulateDensityAdvection()
 {
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	advectionDensity << <1, threadsPerBlock >> > (gridResolution,
+	advectionDensity <<<numBlocks, threadsPerBlock >> > (gridResolution,
 												  velocityBuffer[inputVelocityBuffer],
 												  densityBuffer[inputDensityBuffer],
 												  densityBuffer[nextBufferIndex]);
@@ -520,18 +557,24 @@ void addForce(int x, int y, float2 force)
 	float fx = (float)x / width;
 	float fy = (float)y / height;
 
-	addForce << <1, threadsPerBlock >> > (fx, fy, force, gridResolution,
+	addForceCUDA <<<numBlocks, threadsPerBlock >> > (fx, fy, force, gridResolution,
 										  velocityBuffer[inputVelocityBuffer],
 										  densityColor, densityBuffer[inputDensityBuffer]);
 }
 
 void simulationStep()
 {
+	
 	simulateAdvection();
+	cudaDeviceSynchronize();
 	simulateDiffusion();
+	cudaDeviceSynchronize();
 	simulateVorticity();
+	cudaDeviceSynchronize();
 	projection();
+	cudaDeviceSynchronize();
 	simulateDensityAdvection();
+	cudaDeviceSynchronize();
 }
 
 void visualizationStep()
@@ -539,36 +582,196 @@ void visualizationStep()
 	switch(visualizationMethod)
 	{
 	case 0:
-		visualizationDensity << <1, threadsPerBlock >> > (width, height,
+		visualizationDensity <<<numBlocks, threadsPerBlock >> > (width, height,
 														  visualizationBufferGPU,
 														  gridResolution,
 														  densityBuffer[inputDensityBuffer]);
 		break;
 
 	case 1:
-		visualizationVelocity << <1, threadsPerBlock >> > (width, height,
+		visualizationVelocity <<<numBlocks, threadsPerBlock >> > (width, height,
 														  visualizationBufferGPU,
 														  gridResolution,
 														  velocityBuffer[inputVelocityBuffer]);
 		break;
 
 	case 2:
-		visualizationPressure << <1, threadsPerBlock >> > (width, height,
+		visualizationPressure <<<numBlocks, threadsPerBlock >> > (width, height,
 														  visualizationBufferGPU,
 														  gridResolution,
 														  pressureBuffer[inputPressureBuffer]);
 		break;
 	}
 
+	//cudaError_t t = cudaMemset(visualizationBufferGPU, 93, (sizeof(float4) * width * height) /2);
+	if(cudaDeviceSynchronize() != cudaSuccess)
+		std::cout << "kill me";
 	cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost);
-	// TODO Draw PIXELS
+
+	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, visualizationBufferCPU);
 }
 
-// TODO OPENGL
+// OpenGL
+int method = 1;
+bool keysPressed[256];
 
-int main()
+void initOpenGL()
 {
+	glewExperimental = GL_TRUE;
+	GLenum err = glewInit();
+	if(GLEW_OK != err)
+	{
+		std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
+	}
+	else
+	{
+		if(GLEW_VERSION_3_0)
+		{
+			std::cout << "Driver supports OpenGL 3.0\nDetails:" << std::endl;
+			std::cout << "  Using GLEW " << glewGetString(GLEW_VERSION) << std::endl;
+			std::cout << "  Vendor: " << glGetString(GL_VENDOR) << std::endl;
+			std::cout << "  Renderer: " << glGetString(GL_RENDERER) << std::endl;
+			std::cout << "  Version: " << glGetString(GL_VERSION) << std::endl;
+			std::cout << "  GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+		}
+	}
 
+	glClearColor(0.17f, 0.4f, 0.6f, 1.0f);
+}
+
+void display()
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_DEPTH_TEST);
+
+	
+
+	simulationStep();
+	cudaDeviceSynchronize();
+	//cudaMemset(densityBuffer[0], 93, (sizeof(float4) * width * height));
+	//cudaMemset(densityBuffer[1], 93, (sizeof(float4) * width * height));
+	//cudaDeviceSynchronize();
+	visualizationStep();
+
+	glEnable(GL_DEPTH_TEST);
+	glutSwapBuffers();
+}
+
+void idle()
+{
+	glutPostRedisplay();
+}
+
+void keyDown(unsigned char key, int x, int y)
+{
+	keysPressed[key] = true;
+}
+
+void keyUp(unsigned char key, int x, int y)
+{
+	keysPressed[key] = false;
+	switch(key)
+	{
+	case 'r':
+		resetSimulation();
+		break;
+
+	case 'd':
+		visualizationMethod = 0;
+		break;
+	case 'v':
+		visualizationMethod = 1;
+		break;
+	case 'p':
+		visualizationMethod = 2;
+		break;
+
+	case '1':
+		densityColor = float4{ 1.0f };
+		break;
+
+	case '2':
+		densityColor.x = 1.0f;
+		densityColor.y = densityColor.z = densityColor.w = 0.0f;
+		break;
+
+	case '3':
+		densityColor.y = 1.0f;
+		densityColor.x = densityColor.z = densityColor.w = 0.0f;
+		break;
+
+	case '4':
+		densityColor.z = 1.0f;
+		densityColor.x = densityColor.y = densityColor.w = 0.0f;
+		break;
+
+	case 27:
+		exit(0);
+		break;
+	}
+}
+
+int mX, mY;
+
+void mouseClick(int button, int state, int x, int y)
+{
+	if(button == GLUT_LEFT_BUTTON)
+		if(state == GLUT_DOWN)
+		{
+			mX = x;
+			mY = y;
+		}
+}
+
+void mouseMove(int x, int y)
+{
+	force.x = (float)(x - mX);
+	force.y = -(float)(y - mY);
+	//addForce(mX, height - mY, force);
+	addForce(256, 256, force);
+	mX = x;
+	mY = y;
+}
+
+void reshape(int newWidth, int newHeight)
+{
+	width = newWidth;
+	height = newHeight;
+	glViewport(0, 0, width, height);
+}
+
+int main(int argc, char* argv[])
+{
+	glutInit(&argc, argv);
+	glutInitContextVersion(3, 0);
+	glutInitContextFlags(GLUT_CORE_PROFILE | GLUT_DEBUG);
+	glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE);
+	glutInitWindowSize(width, height);
+	glutCreateWindow("GPGPU: Incompressible fluid simulation");
+
+	initOpenGL();
+
+	glutDisplayFunc(display);
+	glutIdleFunc(idle);
+	glutReshapeFunc(reshape);
+	glutKeyboardFunc(keyDown);
+	glutKeyboardUpFunc(keyUp);
+	glutMouseFunc(mouseClick);
+	glutMotionFunc(mouseMove);
+
+	// OpenCL processing
+	initBuffers();
+
+	glutMainLoop();
+
+	cudaFree(velocityBuffer[0]);
+	cudaFree(velocityBuffer[1]);
+	cudaFree(densityBuffer[0]);
+	cudaFree(densityBuffer[1]);
+	cudaFree(pressureBuffer[0]);
+	cudaFree(pressureBuffer[1]);
+	cudaFree(divergenceBuffer);
+	cudaFree(vorticityBuffer);
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
