@@ -9,6 +9,16 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
+{
+	if(code != cudaSuccess)
+	{
+		fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+		if(abort) exit(code);
+	}
+}
+
 // Kernels
 __constant__ float dt = 0.1f;
 
@@ -406,7 +416,7 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 
 // simulation
 int gridResolution = 512;
-dim3 threadsPerBlock(8, 8);
+dim3 threadsPerBlock(32, 32);
 dim3 numBlocks(gridResolution / threadsPerBlock.x, gridResolution / threadsPerBlock.y);
 
 int inputVelocityBuffer = 0;
@@ -444,18 +454,18 @@ void initBuffers()
 	problemSize[0] = gridResolution;
 	problemSize[1] = gridResolution;
 
-	cudaMalloc(&velocityBuffer[0], sizeof(float2) * gridResolution * gridResolution);
-	cudaMalloc(&velocityBuffer[1], sizeof(float2) * gridResolution * gridResolution);
+	gpuErrchk(cudaMalloc(&velocityBuffer[0], sizeof(float2) * gridResolution * gridResolution));
+	gpuErrchk(cudaMalloc(&velocityBuffer[1], sizeof(float2) * gridResolution * gridResolution));
 
-	cudaMalloc(&densityBuffer[0], sizeof(float4) * gridResolution * gridResolution);
-	cudaMalloc(&densityBuffer[1], sizeof(float4) * gridResolution * gridResolution);
+	gpuErrchk(cudaMalloc(&densityBuffer[0], sizeof(float4) * gridResolution * gridResolution));
+	gpuErrchk(cudaMalloc(&densityBuffer[1], sizeof(float4) * gridResolution * gridResolution));
 
-	cudaMalloc(&pressureBuffer[0], sizeof(float) * gridResolution * gridResolution);
-	cudaMalloc(&pressureBuffer[1], sizeof(float) * gridResolution * gridResolution);
+	gpuErrchk(cudaMalloc(&pressureBuffer[0], sizeof(float) * gridResolution * gridResolution));
+	gpuErrchk(cudaMalloc(&pressureBuffer[1], sizeof(float) * gridResolution * gridResolution));
 
-	cudaMalloc(&divergenceBuffer, sizeof(float) * gridResolution * gridResolution);
+	gpuErrchk(cudaMalloc(&divergenceBuffer, sizeof(float) * gridResolution * gridResolution));
 
-	cudaMalloc(&vorticityBuffer, sizeof(float) * gridResolution * gridResolution);
+	gpuErrchk(cudaMalloc(&vorticityBuffer, sizeof(float) * gridResolution * gridResolution));
 
 	// TODO Could be different.
 	densityColor = float4{ 1.0f };
@@ -464,7 +474,7 @@ void initBuffers()
 	visualizationSize[1] = height;
 
 	visualizationBufferCPU = new float4[width * height];
-	cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height);
+	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
 }
 
 void resetSimulation()
@@ -473,6 +483,7 @@ void resetSimulation()
 													 velocityBuffer[inputVelocityBuffer],
 													 pressureBuffer[inputPressureBuffer],
 													 densityBuffer[inputDensityBuffer]);
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 void resetPressure()
@@ -481,6 +492,7 @@ void resetPressure()
 													 velocityBuffer[(inputVelocityBuffer + 1) % 2],
 													 pressureBuffer[inputPressureBuffer],
 													 densityBuffer[(inputDensityBuffer + 1) % 2]);
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 void simulateAdvection()
@@ -489,18 +501,22 @@ void simulateAdvection()
 	advection<<<numBlocks, threadsPerBlock >>>(gridResolution,
 										   velocityBuffer[inputVelocityBuffer],
 										   velocityBuffer[nextBufferIndex]);
+	gpuErrchk(cudaPeekAtLastError());
 	inputVelocityBuffer = nextBufferIndex;
 }
 
 void simulateVorticity()
 {
-	vorticity <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	vorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
 										   velocityBuffer[inputVelocityBuffer],
 										   vorticityBuffer);
+	gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaDeviceSynchronize());
 
-	addVorticity <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	addVorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
 											  vorticityBuffer,
 											  velocityBuffer[inputVelocityBuffer]);
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 void simulateDiffusion()
@@ -508,47 +524,54 @@ void simulateDiffusion()
 	for(int i = 0; i < 10; ++i)
 	{
 		int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-		diffusion <<<numBlocks, threadsPerBlock >> > (gridResolution,
+		diffusion <<<numBlocks, threadsPerBlock>>> (gridResolution,
 											   velocityBuffer[inputVelocityBuffer],
 											   velocityBuffer[nextBufferIndex]);
+		gpuErrchk(cudaPeekAtLastError());
 		inputVelocityBuffer = nextBufferIndex;
 	}
 }
 
 void projection()
 {
-	divergence <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	divergence <<<numBlocks, threadsPerBlock>>> (gridResolution,
 											velocityBuffer[inputVelocityBuffer],
 											divergenceBuffer);
+	gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaDeviceSynchronize());
 
 	resetPressure();
+	gpuErrchk(cudaDeviceSynchronize());
 
 	for(int i = 0; i < 10; ++i)
 	{
 		int nextBufferIndex = (inputPressureBuffer + 1) % 2;
-		pressureJacobi <<<numBlocks, threadsPerBlock >> > (gridResolution,
+		pressureJacobi <<<numBlocks, threadsPerBlock>>> (gridResolution,
 											   pressureBuffer[inputPressureBuffer],
 											   pressureBuffer[nextBufferIndex],
 											   divergenceBuffer);
+		gpuErrchk(cudaPeekAtLastError());
+		gpuErrchk(cudaDeviceSynchronize());
 		inputPressureBuffer = nextBufferIndex;
 	}
 
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	projectionCUDA <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	projectionCUDA <<<numBlocks, threadsPerBlock>>> (gridResolution,
 												velocityBuffer[inputVelocityBuffer],
 												pressureBuffer[inputPressureBuffer],
 												velocityBuffer[nextBufferIndex]);
+	gpuErrchk(cudaPeekAtLastError());
 	inputVelocityBuffer = nextBufferIndex;
 }
 
 void simulateDensityAdvection()
 {
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	advectionDensity <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	advectionDensity <<<numBlocks, threadsPerBlock>>> (gridResolution,
 												  velocityBuffer[inputVelocityBuffer],
 												  densityBuffer[inputDensityBuffer],
 												  densityBuffer[nextBufferIndex]);
-
+	gpuErrchk(cudaPeekAtLastError());
 	inputVelocityBuffer = nextBufferIndex;
 }
 
@@ -560,25 +583,27 @@ void addForce(int x, int y, float2 force)
 	addForceCUDA <<<numBlocks, threadsPerBlock >> > (fx, fy, force, gridResolution,
 										  velocityBuffer[inputVelocityBuffer],
 										  densityColor, densityBuffer[inputDensityBuffer]);
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 void simulationStep()
 {
-	
+	gpuErrchk(cudaDeviceSynchronize());
 	simulateAdvection();
-	cudaDeviceSynchronize();
+	gpuErrchk(cudaDeviceSynchronize());
 	simulateDiffusion();
-	cudaDeviceSynchronize();
+	gpuErrchk(cudaDeviceSynchronize());
 	simulateVorticity();
-	cudaDeviceSynchronize();
+	gpuErrchk(cudaDeviceSynchronize());
 	projection();
-	cudaDeviceSynchronize();
+	gpuErrchk(cudaDeviceSynchronize());
 	simulateDensityAdvection();
-	cudaDeviceSynchronize();
+	gpuErrchk(cudaDeviceSynchronize());
 }
 
 void visualizationStep()
 {
+	gpuErrchk(cudaDeviceSynchronize());
 	switch(visualizationMethod)
 	{
 	case 0:
@@ -586,6 +611,7 @@ void visualizationStep()
 														  visualizationBufferGPU,
 														  gridResolution,
 														  densityBuffer[inputDensityBuffer]);
+		gpuErrchk(cudaPeekAtLastError());
 		break;
 
 	case 1:
@@ -593,6 +619,7 @@ void visualizationStep()
 														  visualizationBufferGPU,
 														  gridResolution,
 														  velocityBuffer[inputVelocityBuffer]);
+		gpuErrchk(cudaPeekAtLastError());
 		break;
 
 	case 2:
@@ -600,13 +627,13 @@ void visualizationStep()
 														  visualizationBufferGPU,
 														  gridResolution,
 														  pressureBuffer[inputPressureBuffer]);
+		gpuErrchk(cudaPeekAtLastError());
 		break;
 	}
 
-	//cudaError_t t = cudaMemset(visualizationBufferGPU, 93, (sizeof(float4) * width * height) /2);
-	if(cudaDeviceSynchronize() != cudaSuccess)
-		std::cout << "kill me";
-	cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost);
+	gpuErrchk(cudaDeviceSynchronize());
+	gpuErrchk(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaDeviceSynchronize());
 
 	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, visualizationBufferCPU);
 }
@@ -645,9 +672,7 @@ void display()
 	glDisable(GL_DEPTH_TEST);
 
 	
-
 	simulationStep();
-	cudaDeviceSynchronize();
 	//cudaMemset(densityBuffer[0], 93, (sizeof(float4) * width * height));
 	//cudaMemset(densityBuffer[1], 93, (sizeof(float4) * width * height));
 	//cudaDeviceSynchronize();
@@ -687,7 +712,7 @@ void keyUp(unsigned char key, int x, int y)
 		break;
 
 	case '1':
-		densityColor = float4{ 1.0f };
+		densityColor = float4{ 1.0f, 1.0f, 1.0f, 1.0f };
 		break;
 
 	case '2':
@@ -764,14 +789,14 @@ int main(int argc, char* argv[])
 
 	glutMainLoop();
 
-	cudaFree(velocityBuffer[0]);
-	cudaFree(velocityBuffer[1]);
-	cudaFree(densityBuffer[0]);
-	cudaFree(densityBuffer[1]);
-	cudaFree(pressureBuffer[0]);
-	cudaFree(pressureBuffer[1]);
-	cudaFree(divergenceBuffer);
-	cudaFree(vorticityBuffer);
+	gpuErrchk(cudaFree(velocityBuffer[0]));
+	gpuErrchk(cudaFree(velocityBuffer[1]));
+	gpuErrchk(cudaFree(densityBuffer[0]));
+	gpuErrchk(cudaFree(densityBuffer[1]));
+	gpuErrchk(cudaFree(pressureBuffer[0]));
+	gpuErrchk(cudaFree(pressureBuffer[1]));
+	gpuErrchk(cudaFree(divergenceBuffer));
+	gpuErrchk(cudaFree(vorticityBuffer));
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
