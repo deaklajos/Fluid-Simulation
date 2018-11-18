@@ -202,6 +202,13 @@ void diffusion(const int gridResolution,
 
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
 
+		/*if(id.x == 256 && id.y == 256)
+		{
+			float x = velocity.x;
+			float y = velocity.y;
+			printf("vx: %f, vy: %f, Lx: %f, Ly: %f, Rx: %f, Ry: %f, Bx: %f, By: %f, Tx: %f, Ty: %f\n", x, y, vL.x, vL.y, vR.x, vR.y, vB.x, vB.y, vT.x, vT.y);
+		}*/
+
 		outputVelocityBuffer[id.x + id.y * gridResolution] = (vL + vR + vB + vT + alpha * velocity) * beta;
 	}
 	else
@@ -614,13 +621,13 @@ void addForce(int x, int y, float2 force)
 void simulationStep()
 {
 	gpuErrchk(cudaDeviceSynchronize());
-	simulateAdvection(); //This is not good!
-	//gpuErrchk(cudaDeviceSynchronize());
-	//simulateDiffusion(); //This is maybe not good!, bottleneck
-	//gpuErrchk(cudaDeviceSynchronize());
-	//simulateVorticity();
-	//gpuErrchk(cudaDeviceSynchronize());
-	//projection();
+	simulateAdvection();
+	gpuErrchk(cudaDeviceSynchronize());
+	simulateDiffusion();
+	gpuErrchk(cudaDeviceSynchronize());
+	simulateVorticity();
+	gpuErrchk(cudaDeviceSynchronize());
+	projection();
 	gpuErrchk(cudaDeviceSynchronize());
 	simulateDensityAdvection();
 	gpuErrchk(cudaDeviceSynchronize());
@@ -738,27 +745,22 @@ void keyUp(unsigned char key, int x, int y)
 		break;
 
 	case '1':
-		//densityColor = float4{1.0f, 1.0f, 1.0f, 1.0f };
 		densityColor.x = densityColor.y = densityColor.z = densityColor.w = 1.0f;
-		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '2':
 		densityColor.x = 1.0f;
 		densityColor.y = densityColor.z = densityColor.w = 0.0f;
-		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '3':
 		densityColor.y = 1.0f;
 		densityColor.x = densityColor.z = densityColor.w = 0.0f;
-		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '4':
 		densityColor.z = 1.0f;
 		densityColor.x = densityColor.y = densityColor.w = 0.0f;
-		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case 27:
