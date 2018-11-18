@@ -44,7 +44,7 @@ float fract(const float x, float* b)
 {
 	// TODO The implementation may not be okay.
 	*b = floor(x);
-	return fmin(x - floor(x), 0.999999f);
+	return fmin(x - floor(x), 0.999f);
 }
 
 __device__
@@ -115,7 +115,7 @@ void advection(const int gridResolution,
 	{
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
 
-		float2 p{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
+		float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
 
 		outputVelocityBuffer[id.x + id.y * gridResolution] = getBil(p, gridResolution, inputVelocityBuffer);
 	}
@@ -148,7 +148,7 @@ void advectionDensity(const int gridResolution,
 	}
 	else
 	{
-		outputDensityBuffer[id.x + id.y * gridResolution] = { 0.0f,  0.0f,  0.0f,  0.0f };
+		outputDensityBuffer[id.x + id.y * gridResolution] = float4{ 0.0f,  0.0f,  0.0f,  0.0f };
 	}
 }
 
@@ -406,7 +406,7 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 	if(id.x < width && id.y < height)
 	{
 		float pressure = pressureBuffer[id.x + id.y * width];
-		visualizationBuffer[id.x + id.y * width] = float4{ (1.0f + pressure) / 2.0f }; // TODO somtin???
+		visualizationBuffer[id.x + id.y * width] = make_float4((1.0f + pressure) / 2.0f ); // TODO somtin???
 	}
 }
 
@@ -468,7 +468,7 @@ void initBuffers()
 	gpuErrchk(cudaMalloc(&vorticityBuffer, sizeof(float) * gridResolution * gridResolution));
 
 	// TODO Could be different.
-	densityColor = float4{ 1.0f };
+	densityColor = float4{ 1.0f, 1.0f, 1.0f, 1.0f };
 
 	visualizationSize[0] = width;
 	visualizationSize[1] = height;
@@ -589,14 +589,14 @@ void addForce(int x, int y, float2 force)
 void simulationStep()
 {
 	gpuErrchk(cudaDeviceSynchronize());
-	simulateAdvection();
-	gpuErrchk(cudaDeviceSynchronize());
-	simulateDiffusion();
-	gpuErrchk(cudaDeviceSynchronize());
-	simulateVorticity();
-	gpuErrchk(cudaDeviceSynchronize());
-	projection();
-	gpuErrchk(cudaDeviceSynchronize());
+	simulateAdvection(); //This is not good!
+	//gpuErrchk(cudaDeviceSynchronize());
+	//simulateDiffusion(); //This is maybe not good!, bottleneck
+	//gpuErrchk(cudaDeviceSynchronize());
+	//simulateVorticity();
+	//gpuErrchk(cudaDeviceSynchronize());
+	//projection();
+	//gpuErrchk(cudaDeviceSynchronize());
 	simulateDensityAdvection();
 	gpuErrchk(cudaDeviceSynchronize());
 }
@@ -671,7 +671,6 @@ void display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
-	
 	simulationStep();
 	//cudaMemset(densityBuffer[0], 93, (sizeof(float4) * width * height));
 	//cudaMemset(densityBuffer[1], 93, (sizeof(float4) * width * height));
@@ -684,6 +683,7 @@ void display()
 
 void idle()
 {
+	//addForce(256, 256, make_float2(0.0001f, 0.0001f));
 	glutPostRedisplay();
 }
 
@@ -694,6 +694,7 @@ void keyDown(unsigned char key, int x, int y)
 
 void keyUp(unsigned char key, int x, int y)
 {
+
 	keysPressed[key] = false;
 	switch(key)
 	{
@@ -712,22 +713,27 @@ void keyUp(unsigned char key, int x, int y)
 		break;
 
 	case '1':
-		densityColor = float4{ 1.0f, 1.0f, 1.0f, 1.0f };
+		//densityColor = float4{1.0f, 1.0f, 1.0f, 1.0f };
+		densityColor.x = densityColor.y = densityColor.z = densityColor.w = 1.0f;
+		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '2':
 		densityColor.x = 1.0f;
 		densityColor.y = densityColor.z = densityColor.w = 0.0f;
+		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '3':
 		densityColor.y = 1.0f;
 		densityColor.x = densityColor.z = densityColor.w = 0.0f;
+		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case '4':
 		densityColor.z = 1.0f;
 		densityColor.x = densityColor.y = densityColor.w = 0.0f;
+		//printf("%f, %f, %f, %f", densityColor.x, densityColor.y, densityColor.z, densityColor.w);
 		break;
 
 	case 27:
