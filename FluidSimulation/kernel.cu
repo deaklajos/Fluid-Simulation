@@ -113,6 +113,20 @@ void advection(const int gridResolution,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{
+		
+
+		/*if(id.x == 256 && id.y == 256)
+		{
+			float x = inputVelocityBuffer[id.x + id.y * gridResolution].x;
+			float y = inputVelocityBuffer[id.x + id.y * gridResolution].y;
+
+			float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
+
+			float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
+
+			float2 bil = getBil(p, gridResolution, inputVelocityBuffer);
+			printf("vx: %f, vy: %f, px: %f, py: %f, bilx: %f, bily: %f\n", x, y, p.x, p.y, bil.x, bil.y);
+		}*/
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
 
 		float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
@@ -145,6 +159,15 @@ void advectionDensity(const int gridResolution,
 		float2 p = float2{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
 
 		outputDensityBuffer[id.x + id.y * gridResolution] = getBil4(p, gridResolution, inputDensityBuffer);
+
+		//if(id.x == 256 && id.y == 256)
+		//{
+		//	float4 bil = getBil4(p, gridResolution, inputDensityBuffer);
+		//	float x = velocity.x;
+		//	float y = velocity.y;
+		//	printf("vx: %f, vy: %f, px: %f, py: %f, bilx: %f, bily: %f\n", x, y, p.x, p.y, bil.x, bil.y);
+		//}
+
 	}
 	else
 	{
@@ -448,6 +471,7 @@ int visualizationMethod = 0;
 size_t visualizationSize[2];
 
 // End of Buffers
+void addForce(int x, int y, float2 force);
 
 void initBuffers()
 {
@@ -475,6 +499,7 @@ void initBuffers()
 
 	visualizationBufferCPU = new float4[width * height];
 	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
+	addForce(256, 256, make_float2( 100.1f, 100.1f ));
 }
 
 void resetSimulation()
@@ -566,13 +591,13 @@ void projection()
 
 void simulateDensityAdvection()
 {
-	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
+	int nextBufferIndex = (inputDensityBuffer + 1) % 2;
 	advectionDensity <<<numBlocks, threadsPerBlock>>> (gridResolution,
 												  velocityBuffer[inputVelocityBuffer],
 												  densityBuffer[inputDensityBuffer],
 												  densityBuffer[nextBufferIndex]);
 	gpuErrchk(cudaPeekAtLastError());
-	inputVelocityBuffer = nextBufferIndex;
+	inputDensityBuffer = nextBufferIndex;
 }
 
 void addForce(int x, int y, float2 force)
@@ -596,7 +621,7 @@ void simulationStep()
 	//simulateVorticity();
 	//gpuErrchk(cudaDeviceSynchronize());
 	//projection();
-	//gpuErrchk(cudaDeviceSynchronize());
+	gpuErrchk(cudaDeviceSynchronize());
 	simulateDensityAdvection();
 	gpuErrchk(cudaDeviceSynchronize());
 }
