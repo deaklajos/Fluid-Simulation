@@ -453,9 +453,7 @@ void initBuffers()
 	visualizationSize[0] = width;
 	visualizationSize[1] = height;
 
-	//TODO Use pinned memory!
 	gpuErrchk(cudaMallocHost((void**)&visualizationBufferCPU, sizeof(float4) * width * height));
-	//visualizationBufferCPU = new float4[width * height];
 	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
 }
 
