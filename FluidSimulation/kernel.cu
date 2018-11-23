@@ -113,20 +113,6 @@ void advection(const int gridResolution,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{
-		
-
-		/*if(id.x == 256 && id.y == 256)
-		{
-			float x = inputVelocityBuffer[id.x + id.y * gridResolution].x;
-			float y = inputVelocityBuffer[id.x + id.y * gridResolution].y;
-
-			float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
-
-			float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
-
-			float2 bil = getBil(p, gridResolution, inputVelocityBuffer);
-			printf("vx: %f, vy: %f, px: %f, py: %f, bilx: %f, bily: %f\n", x, y, p.x, p.y, bil.x, bil.y);
-		}*/
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
 
 		float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
@@ -159,15 +145,6 @@ void advectionDensity(const int gridResolution,
 		float2 p = float2{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
 
 		outputDensityBuffer[id.x + id.y * gridResolution] = getBil4(p, gridResolution, inputDensityBuffer);
-
-		//if(id.x == 256 && id.y == 256)
-		//{
-		//	float4 bil = getBil4(p, gridResolution, inputDensityBuffer);
-		//	float x = velocity.x;
-		//	float y = velocity.y;
-		//	printf("vx: %f, vy: %f, px: %f, py: %f, bilx: %f, bily: %f\n", x, y, p.x, p.y, bil.x, bil.y);
-		//}
-
 	}
 	else
 	{
@@ -201,13 +178,6 @@ void diffusion(const int gridResolution,
 		float2 vT = inputVelocityBuffer[id.x + (id.y + 1) * gridResolution];
 
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
-
-		/*if(id.x == 256 && id.y == 256)
-		{
-			float x = velocity.x;
-			float y = velocity.y;
-			printf("vx: %f, vy: %f, Lx: %f, Ly: %f, Rx: %f, Ry: %f, Bx: %f, By: %f, Tx: %f, Ty: %f\n", x, y, vL.x, vL.y, vR.x, vR.y, vB.x, vB.y, vT.x, vT.y);
-		}*/
 
 		outputVelocityBuffer[id.x + id.y * gridResolution] = (vL + vR + vB + vT + alpha * velocity) * beta;
 	}
@@ -344,7 +314,7 @@ void projectionCUDA(const int gridResolution,
 
 		float2 velocity = inputVelocityBuffer[id.x + id.y * gridResolution];
 
-		outputVelocityBuffer[id.x + id.y * gridResolution] = velocity -  /* 0.5f **//* (1.0f / 256.0f) **/ float2{ pR - pL, pT - pB };
+		outputVelocityBuffer[id.x + id.y * gridResolution] = velocity - float2{ pR - pL, pT - pB };
 	}
 	else
 	{
@@ -373,22 +343,6 @@ void addForceCUDA(const float x, const float y, const float2 force,
 	velocityBuffer[id.x + id.y * gridResolution] += c * force;
 	densityBuffer[id.x + id.y * gridResolution] += c * density;
 }
-
-//__global__
-//void createForce()
-//{
-//	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
-//
-//	float dx = ((float)id.x / (float)gridResolution) - x;
-//	float dy = ((float)id.y / (float)gridResolution) - y;
-//
-//	float radius = 0.001f;
-//
-//	float c = exp(-(dx * dx + dy * dy) / radius) * dt;
-//
-//	velocityBuffer[id.x + id.y * gridResolution] += c * force;
-//}
-
 
 // *************
 // Visualization
@@ -620,7 +574,6 @@ void simulationStep()
 
 void visualizationStep()
 {
-	gpuErrchk(cudaDeviceSynchronize());
 	switch(visualizationMethod)
 	{
 	case 0:
@@ -684,16 +637,13 @@ void initOpenGL()
 void display()
 {
 	static int i = 0;
-	//if(++i > 100)
-	//	exit(0);
+	if(++i > 100)
+		exit(0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
 	simulationStep();
-	//cudaMemset(densityBuffer[0], 93, (sizeof(float4) * width * height));
-	//cudaMemset(densityBuffer[1], 93, (sizeof(float4) * width * height));
-	//cudaDeviceSynchronize();
 	visualizationStep();
 
 	glEnable(GL_DEPTH_TEST);
@@ -702,7 +652,6 @@ void display()
 
 void idle()
 {
-	//addForce(256, 256, make_float2(0.0001f, 0.0001f));
 	glutPostRedisplay();
 }
 
