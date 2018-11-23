@@ -454,7 +454,8 @@ void initBuffers()
 	visualizationSize[1] = height;
 
 	//TODO Use pinned memory!
-	visualizationBufferCPU = new float4[width * height];
+	gpuErrchk(cudaMallocHost((void**)&visualizationBufferCPU, sizeof(float4) * width * height));
+	//visualizationBufferCPU = new float4[width * height];
 	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
 }
 
@@ -758,6 +759,7 @@ int main(int argc, char* argv[])
 
 	glutMainLoop();
 
+	gpuErrchk(cudaDeviceSynchronize());
 	gpuErrchk(cudaFree(velocityBuffer[0]));
 	gpuErrchk(cudaFree(velocityBuffer[1]));
 	gpuErrchk(cudaFree(densityBuffer[0]));
@@ -766,6 +768,8 @@ int main(int argc, char* argv[])
 	gpuErrchk(cudaFree(pressureBuffer[1]));
 	gpuErrchk(cudaFree(divergenceBuffer));
 	gpuErrchk(cudaFree(vorticityBuffer));
+	gpuErrchk(cudaFreeHost(visualizationBufferCPU));
+	
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
