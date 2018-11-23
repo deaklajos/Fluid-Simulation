@@ -399,10 +399,6 @@ void visualizationDensity(const int width, const int height, float4* visualizati
 						  const int gridResolution, float4* densityBuffer)
 {
 	uint2 id{ blockIdx.x*blockDim.x + threadIdx.x, blockIdx.y*blockDim.y + threadIdx.y };
-	int blocki; blocki = blockIdx.x;
-	int blockd; blockd = blockDim.x;
-	int thid; thid = threadIdx.x;
-	//printf("blockid: %d, blockdim: %d, thidx: %d \n", blocki, blockd, thid);
 
 	if(id.x < width && id.y < height)
 	{
@@ -503,11 +499,9 @@ void initBuffers()
 	visualizationSize[0] = width;
 	visualizationSize[1] = height;
 
+	//TODO Use pinned memory!
 	visualizationBufferCPU = new float4[width * height];
 	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
-
-	//TODO remove this.
-	addForce(256, 256, make_float2( 100.1f, 100.1f ));
 }
 
 void resetSimulation()
@@ -521,7 +515,7 @@ void resetSimulation()
 
 void resetPressure()
 {
-	resetSimulationCUDA <<<numBlocks, threadsPerBlock >> > (gridResolution,
+	resetSimulationCUDA<<<numBlocks, threadsPerBlock >> > (gridResolution,
 													 velocityBuffer[(inputVelocityBuffer + 1) % 2],
 													 pressureBuffer[inputPressureBuffer],
 													 densityBuffer[(inputDensityBuffer + 1) % 2]);
@@ -544,7 +538,6 @@ void simulateVorticity()
 										   velocityBuffer[inputVelocityBuffer],
 										   vorticityBuffer);
 	gpuErrchk(cudaPeekAtLastError());
-	gpuErrchk(cudaDeviceSynchronize());
 
 	addVorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
 											  vorticityBuffer,
@@ -571,10 +564,8 @@ void projection()
 											velocityBuffer[inputVelocityBuffer],
 											divergenceBuffer);
 	gpuErrchk(cudaPeekAtLastError());
-	gpuErrchk(cudaDeviceSynchronize());
 
 	resetPressure();
-	gpuErrchk(cudaDeviceSynchronize());
 
 	for(int i = 0; i < 10; ++i)
 	{
@@ -584,7 +575,6 @@ void projection()
 											   pressureBuffer[nextBufferIndex],
 											   divergenceBuffer);
 		gpuErrchk(cudaPeekAtLastError());
-		gpuErrchk(cudaDeviceSynchronize());
 		inputPressureBuffer = nextBufferIndex;
 	}
 
@@ -621,17 +611,11 @@ void addForce(int x, int y, float2 force)
 
 void simulationStep()
 {
-	gpuErrchk(cudaDeviceSynchronize());
 	simulateAdvection();
-	gpuErrchk(cudaDeviceSynchronize());
 	simulateDiffusion();
-	gpuErrchk(cudaDeviceSynchronize());
 	simulateVorticity();
-	gpuErrchk(cudaDeviceSynchronize());
 	projection();
-	gpuErrchk(cudaDeviceSynchronize());
 	simulateDensityAdvection();
-	gpuErrchk(cudaDeviceSynchronize());
 }
 
 void visualizationStep()
@@ -664,9 +648,7 @@ void visualizationStep()
 		break;
 	}
 
-	gpuErrchk(cudaDeviceSynchronize());
 	gpuErrchk(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaDeviceSynchronize());
 
 	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, visualizationBufferCPU);
 }
@@ -701,6 +683,10 @@ void initOpenGL()
 
 void display()
 {
+	static int i = 0;
+	//if(++i > 100)
+	//	exit(0);
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
