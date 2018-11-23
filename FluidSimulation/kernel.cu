@@ -395,7 +395,7 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 // Buffers
 
 // simulation
-int gridResolution = 512;
+int gridResolution = 1024;
 dim3 threadsPerBlock(32, 32);
 dim3 numBlocks(gridResolution / threadsPerBlock.x, gridResolution / threadsPerBlock.y);
 
@@ -417,8 +417,8 @@ size_t problemSize[2];
 float2 force;
 
 // visualization
-int width = 512;
-int height = 512;
+int width = 1024;
+int height = 1024;
 
 float4* visualizationBufferGPU;
 float4* visualizationBufferCPU;
@@ -637,7 +637,7 @@ void initOpenGL()
 void display()
 {
 	static int i = 0;
-	if(++i > 100)
+	if(++i > 10)
 		exit(0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -722,7 +722,7 @@ void mouseMove(int x, int y)
 	force.x = (float)(x - mX);
 	force.y = -(float)(y - mY);
 	//addForce(mX, height - mY, force);
-	addForce(256, 256, force);
+	addForce(height / 2, width / 2, force);
 	mX = x;
 	mY = y;
 }
