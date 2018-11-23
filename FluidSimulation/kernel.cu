@@ -639,7 +639,7 @@ void display()
 {
 	static int i = 0;
 	if(++i > 10)
-		exit(0);
+		glutLeaveMainLoop();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
@@ -701,7 +701,7 @@ void keyUp(unsigned char key, int x, int y)
 		break;
 
 	case 27:
-		exit(0);
+		glutLeaveMainLoop();
 		break;
 	}
 }
