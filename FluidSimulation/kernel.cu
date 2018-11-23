@@ -498,7 +498,6 @@ void initBuffers()
 
 	gpuErrchk(cudaMalloc(&vorticityBuffer, sizeof(float) * gridResolution * gridResolution));
 
-	// TODO Could be different.
 	densityColor = float4{ 1.0f, 1.0f, 1.0f, 1.0f };
 
 	visualizationSize[0] = width;
@@ -506,6 +505,8 @@ void initBuffers()
 
 	visualizationBufferCPU = new float4[width * height];
 	gpuErrchk(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
+
+	//TODO remove this.
 	addForce(256, 256, make_float2( 100.1f, 100.1f ));
 }
 
