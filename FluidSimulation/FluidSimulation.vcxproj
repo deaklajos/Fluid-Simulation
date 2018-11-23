@@ -70,8 +70,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\include;D:\Projects\GPGPU\Fluid-Simulation\freeglut\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\lib\Release\Win32;D:\Projects\GPGPU\Fluid-Simulation\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
-    <SourcePath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\bin\Release\x64;D:\Projects\GPGPU\Fluid-Simulation\freeglut\bin\x64;$(SourcePath)</SourcePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
@@ -80,8 +80,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\include;D:\Projects\GPGPU\Fluid-Simulation\freeglut\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\lib\Release\Win32;D:\Projects\GPGPU\Fluid-Simulation\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
-    <SourcePath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\bin\Release\x64;D:\Projects\GPGPU\Fluid-Simulation\freeglut\bin\x64;$(SourcePath)</SourcePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <IncludePath>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\include;D:\Projects\GPGPU\Fluid-Simulation\freeglut\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;$(IncludePath)</IncludePath>
@@ -97,7 +97,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\Projects\GPGPU\Fluid-Simulation\freeglut\lib\x64;D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -137,6 +137,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
       <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\Projects\GPGPU\Fluid-Simulation\freeglut\lib\x64;D:\Projects\GPGPU\Fluid-Simulation\glew-2.1.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
