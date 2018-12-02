@@ -558,6 +558,9 @@ void resetSimulation()
 
 void resetPressure()
 {
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[(inputVelocityBuffer + 1) % 2]));
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_2, pressureBufferArray[inputPressureBuffer]));
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[(inputDensityBuffer + 1) % 2]));
 	resetSimulationCUDA<<<numBlocks, threadsPerBlock >> > (gridResolution,
 													 velocityBuffer[(inputVelocityBuffer + 1) % 2],
 													 pressureBuffer[inputPressureBuffer],
