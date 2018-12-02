@@ -133,6 +133,7 @@ void advection(const int gridResolution,
 		float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
 
 		//TODO think: set bordertype
+		//TODO get it and write it after
 		p = clamp(p, make_float2(0.0f), make_float2(gridResolution));
 		surf2Dwrite(tex2D(texture_float2, p.x + 0.5f, p.y + 0.5f), surface_out_1, id.x * sizeof(float2), id.y);
 	}
@@ -157,15 +158,27 @@ void advectionDensity(const int gridResolution,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{
-		float2 velocity = velocityBuffer[id.x + id.y * gridResolution];
+		/*float2 velocity = velocityBuffer[id.x + id.y * gridResolution];
 
 		float2 p = float2{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
 
-		outputDensityBuffer[id.x + id.y * gridResolution] = getBil4(p, gridResolution, inputDensityBuffer);
+		outputDensityBuffer[id.x + id.y * gridResolution] = getBil4(p, gridResolution, inputDensityBuffer);*/
+
+
+
+		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
+
+		float2 p = float2{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
+
+		p = clamp(p, make_float2(0.0f), make_float2(gridResolution));
+		surf2Dwrite(tex2D(texture_float4, p.x + 0.5f, p.y + 0.5f), surface_out_1, id.x * sizeof(float4), id.y);
+
 	}
 	else
 	{
-		outputDensityBuffer[id.x + id.y * gridResolution] = float4{ 0.0f,  0.0f,  0.0f,  0.0f };
+		//outputDensityBuffer[id.x + id.y * gridResolution] = float4{ 0.0f,  0.0f,  0.0f,  0.0f };
+
+		surf2Dwrite(float4{ 0.0f,  0.0f,  0.0f,  0.0f }, surface_out_1, id.x * sizeof(float4), id.y);
 	}
 }
 
@@ -638,7 +651,7 @@ void simulateDensityAdvection()
 
 	gpuErrchk(cudaBindTextureToArray(texture_float4, densityBufferArray[inputDensityBuffer], desc_float4));
 	//texture_float2_in.filterMode = cudaFilterModeLinear;
-	texture_float4.filterMode = cudaFilterModePoint;
+	texture_float4.filterMode = cudaFilterModeLinear;
 
 	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, densityBufferArray[nextBufferIndex]));
 
