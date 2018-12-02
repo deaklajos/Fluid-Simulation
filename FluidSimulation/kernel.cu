@@ -500,7 +500,9 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 
 	if(id.x < width && id.y < height)
 	{
-		float pressure = pressureBuffer[id.x + id.y * width];
+		//float pressure = pressureBuffer[id.x + id.y * width];
+		float pressure = tex2D(texture_float_1, id.x, id.y);
+
 		visualizationBuffer[id.x + id.y * width] = make_float4((1.0f + pressure) / 2.0f ); // TODO somtin???
 	}
 }
@@ -804,11 +806,16 @@ void visualizationStep()
 		break;
 
 	case 2:
+		gpuErrchk(cudaBindTextureToArray(texture_float_1, pressureBufferArray[inputPressureBuffer], desc_float));
+		texture_float_1.filterMode = cudaFilterModePoint;
+
+
 		visualizationPressure <<<numBlocks, threadsPerBlock >> > (width, height,
 														  visualizationBufferGPU,
 														  gridResolution,
 														  pressureBuffer[inputPressureBuffer]);
 		gpuErrchk(cudaPeekAtLastError());
+		gpuErrchk(cudaUnbindTexture(texture_float_1));
 		break;
 	}
 
