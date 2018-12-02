@@ -248,16 +248,28 @@ void vorticity(const int gridResolution, float2* velocityBuffer,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{
-		float2 vL = velocityBuffer[id.x - 1 + id.y * gridResolution];
-		float2 vR = velocityBuffer[id.x + 1 + id.y * gridResolution];
-		float2 vB = velocityBuffer[id.x + (id.y - 1) * gridResolution];
-		float2 vT = velocityBuffer[id.x + (id.y + 1) * gridResolution];
+		//float2 vL = velocityBuffer[id.x - 1 + id.y * gridResolution];
+		//float2 vR = velocityBuffer[id.x + 1 + id.y * gridResolution];
+		//float2 vB = velocityBuffer[id.x + (id.y - 1) * gridResolution];
+		//float2 vT = velocityBuffer[id.x + (id.y + 1) * gridResolution];
 
-		vorticityBuffer[id.x + id.y * gridResolution] = (vR.y - vL.y) - (vT.x - vB.x);
+		//vorticityBuffer[id.x + id.y * gridResolution] = (vR.y - vL.y) - (vT.x - vB.x);
+
+
+		float2 vL = tex2D(texture_float2, id.x - 1 + 0.5f, id.y + 0.5f);
+		float2 vR = tex2D(texture_float2, id.x + 1 + 0.5f, id.y + 0.5f);
+		float2 vB = tex2D(texture_float2, id.x + 0.5f, id.y - 1 + 0.5f);
+		float2 vT = tex2D(texture_float2, id.x + 0.5f, id.y + 1 + 0.5f);
+
+		float out = (vR.y - vL.y) - (vT.x - vB.x);
+
+		surf2Dwrite(out, surface_out_1, id.x * sizeof(float), id.y);
 	}
 	else
 	{
-		vorticityBuffer[id.x + id.y * gridResolution] = 0.0f;
+		//vorticityBuffer[id.x + id.y * gridResolution] = 0.0f;
+
+		surf2Dwrite(0.0f, surface_out_1, id.x * sizeof(float), id.y);
 	}
 }
 
@@ -273,10 +285,25 @@ void addVorticity(const int gridResolution, float* vorticityBuffer,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{
-		float vL = vorticityBuffer[id.x - 1 + id.y * gridResolution];
-		float vR = vorticityBuffer[id.x + 1 + id.y * gridResolution];
-		float vB = vorticityBuffer[id.x + (id.y - 1) * gridResolution];
-		float vT = vorticityBuffer[id.x + (id.y + 1) * gridResolution];
+		//float vL = vorticityBuffer[id.x - 1 + id.y * gridResolution];
+		//float vR = vorticityBuffer[id.x + 1 + id.y * gridResolution];
+		//float vB = vorticityBuffer[id.x + (id.y - 1) * gridResolution];
+		//float vT = vorticityBuffer[id.x + (id.y + 1) * gridResolution];
+
+		//float4 gradV{ vR - vL, vT - vB, 0.0f, 0.0f };
+		//float4 z{ 0.0f, 0.0f, 1.0f, 0.0f };
+
+		//if(dot(gradV, gradV))
+		//{
+		//	float4 vorticityForce = make_float4(scale * cross(make_float3(gradV), make_float3(z)));
+		//	velocityBuffer[id.x + id.y * gridResolution] += make_float2(vorticityForce.x, vorticityForce.y) * dt;
+		//}
+
+
+		float vL = tex2D(texture_float_1, id.x - 1 + 0.5f, id.y + 0.5f);
+		float vR = tex2D(texture_float_1, id.x + 1 + 0.5f, id.y + 0.5f);
+		float vB = tex2D(texture_float_1, id.x + 0.5f, id.y - 1 + 0.5f);
+		float vT = tex2D(texture_float_1, id.x + 0.5f, id.y + 1 + 0.5f);
 
 		float4 gradV{ vR - vL, vT - vB, 0.0f, 0.0f };
 		float4 z{ 0.0f, 0.0f, 1.0f, 0.0f };
@@ -284,7 +311,12 @@ void addVorticity(const int gridResolution, float* vorticityBuffer,
 		if(dot(gradV, gradV))
 		{
 			float4 vorticityForce = make_float4(scale * cross(make_float3(gradV), make_float3(z)));
-			velocityBuffer[id.x + id.y * gridResolution] += make_float2(vorticityForce.x, vorticityForce.y) * dt;
+
+			float2 temp;
+			surf2Dread(&temp, surface_out_1, id.x * sizeof(float2), id.y);
+
+			temp += make_float2(vorticityForce.x, vorticityForce.y) * dt;
+			surf2Dwrite(temp, surface_out_1, id.x * sizeof(float2), id.y);
 		}
 	}
 }
@@ -634,15 +666,27 @@ void simulateAdvection()
 
 void simulateVorticity()
 {
-	//vorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
-	//									   velocityBuffer[inputVelocityBuffer],
-	//									   vorticityBuffer);
-	//gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
+	texture_float2.filterMode = cudaFilterModeLinear;
 
-	//addVorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
-	//										  vorticityBuffer,
-	//										  velocityBuffer[inputVelocityBuffer]);
-	//gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, vorticityBufferArray));
+
+	vorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
+										   velocityBuffer[inputVelocityBuffer],
+										   vorticityBuffer);
+	gpuErrchk(cudaUnbindTexture(texture_float2));
+	gpuErrchk(cudaPeekAtLastError());
+
+	gpuErrchk(cudaBindTextureToArray(texture_float_1, vorticityBufferArray, desc_float));
+	texture_float_1.filterMode = cudaFilterModeLinear;
+
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[inputVelocityBuffer]));
+
+	addVorticity <<<numBlocks, threadsPerBlock>>> (gridResolution,
+											  vorticityBuffer,
+											  velocityBuffer[inputVelocityBuffer]);
+	gpuErrchk(cudaPeekAtLastError());
+	gpuErrchk(cudaUnbindTexture(texture_float_1));
 }
 
 void simulateDiffusion()
