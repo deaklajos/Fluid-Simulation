@@ -792,9 +792,9 @@ void initOpenGL()
 
 void display()
 {
-	//static int i = 0;
-	//if(++i > 10)
-	//	glutLeaveMainLoop();
+	static int i = 0;
+	if(++i > 10)
+		glutLeaveMainLoop();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
@@ -909,6 +909,9 @@ int main(int argc, char* argv[])
 	glutMouseFunc(mouseClick);
 	glutMotionFunc(mouseMove);
 
+	// Allows deallocations.
+	glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
+
 	// OpenCL processing
 	initBuffers();
 
@@ -923,8 +926,18 @@ int main(int argc, char* argv[])
 	gpuErrchk(cudaFree(pressureBuffer[1]));
 	gpuErrchk(cudaFree(divergenceBuffer));
 	gpuErrchk(cudaFree(vorticityBuffer));
+	gpuErrchk(cudaFree(visualizationBufferGPU));
 	gpuErrchk(cudaFreeHost(visualizationBufferCPU));
-	
+
+	gpuErrchk(cudaFreeArray(velocityBufferArray[0]));
+	gpuErrchk(cudaFreeArray(velocityBufferArray[1]));
+	gpuErrchk(cudaFreeArray(densityBufferArray[0]));
+	gpuErrchk(cudaFreeArray(densityBufferArray[1]));
+	gpuErrchk(cudaFreeArray(pressureBufferArray[0]));
+	gpuErrchk(cudaFreeArray(pressureBufferArray[1]));
+	gpuErrchk(cudaFreeArray(divergenceBufferArray));
+	gpuErrchk(cudaFreeArray(vorticityBufferArray));
+	gpuErrchk(cudaFreeArray(visualizationBufferArrayGPU));	
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
