@@ -25,7 +25,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 
 // Kernels
 texture<float, 2, cudaReadModeElementType> texture_float_0;
-texture<float2, 2, cudaReadModeElementType> texture_float2_in;
+texture<float2, 2, cudaReadModeElementType> texture_float2;
 surface<void, 2> surface_out_1;
 surface<void, 2> surface_out_2;
 texture<float4, 2, cudaReadModeElementType> texture_float4;
@@ -129,19 +129,19 @@ void advection(const int gridResolution,
 	if(id.x > 0 && id.x < gridResolution - 1 &&
 	   id.y > 0 && id.y < gridResolution - 1)
 	{		
-		float2 velocity = tex2D(texture_float2_in, id.x + 0.5f, id.y + 0.5f);
+		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
 		float2 p = make_float2((float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y);
 
 		//TODO think: set bordertype
 		p = clamp(p, make_float2(0.0f), make_float2(gridResolution));
-		surf2Dwrite(tex2D(texture_float2_in, p.x + 0.5f, p.y + 0.5f), surface_out_1, id.x * sizeof(float2), id.y);
+		surf2Dwrite(tex2D(texture_float2, p.x + 0.5f, p.y + 0.5f), surface_out_1, id.x * sizeof(float2), id.y);
 	}
 	else
 	{
-		if(id.x == 0) surf2Dwrite(-tex2D(texture_float2_in, id.x + 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
-		if(id.x == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2_in, id.x - 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
-		if(id.y == 0) surf2Dwrite(-tex2D(texture_float2_in, id.x + 1, id.y + 1), surface_out_1, id.x * sizeof(float2), id.y);
-		if(id.y == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2_in, id.x + 1, id.y - 1), surface_out_1, id.x * sizeof(float2), id.y);
+		if(id.x == 0) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
+		if(id.x == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2, id.x - 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
+		if(id.y == 0) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y + 1), surface_out_1, id.x * sizeof(float2), id.y);
+		if(id.y == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y - 1), surface_out_1, id.x * sizeof(float2), id.y);
 	}
 }
 
@@ -200,12 +200,12 @@ void diffusion(const int gridResolution,
 		//outputVelocityBuffer[id.x + id.y * gridResolution] = (vL + vR + vB + vT + alpha * velocity) * beta;
 
 		//tex
-		float2 vL = tex2D(texture_float2_in, id.x - 1 + 0.5f, id.y + 0.5f);
-		float2 vR = tex2D(texture_float2_in, id.x + 1 + 0.5f, id.y + 0.5f);
-		float2 vB = tex2D(texture_float2_in, id.x + 0.5f, id.y - 1 + 0.5f);
-		float2 vT = tex2D(texture_float2_in, id.x + 0.5f, id.y + 1 + 0.5f);
+		float2 vL = tex2D(texture_float2, id.x - 1 + 0.5f, id.y + 0.5f);
+		float2 vR = tex2D(texture_float2, id.x + 1 + 0.5f, id.y + 0.5f);
+		float2 vB = tex2D(texture_float2, id.x + 0.5f, id.y - 1 + 0.5f);
+		float2 vT = tex2D(texture_float2, id.x + 0.5f, id.y + 1 + 0.5f);
 
-		float2 velocity = tex2D(texture_float2_in, id.x + 0.5f, id.y + 0.5f);
+		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
 
 		float2 out = (vL + vR + vB + vT + alpha * velocity) * beta;
 
@@ -215,7 +215,7 @@ void diffusion(const int gridResolution,
 	{
 		/*outputVelocityBuffer[id.x + id.y * gridResolution] = inputVelocityBuffer[id.x + id.y * gridResolution];*/
 
-		float2 velocity = tex2D(texture_float2_in, id.x + 0.5f, id.y + 0.5f);
+		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
 
 		surf2Dwrite(velocity, surface_out_1, id.x * sizeof(float2), id.y);
 	}
@@ -421,7 +421,7 @@ void visualizationVelocity(const int width, const int height, float4* visualizat
 	if(id.x < width && id.y < height)
 	{
 		//float2 velocity = velocityBuffer[id.x + id.y * width];
-		float2 velocity = tex2D(texture_float2_in, id.x, id.y);
+		float2 velocity = tex2D(texture_float2, id.x, id.y);
 		//if(velocity.x > 0.0001f)
 		//	velocity.x = 0;
 		float2 tmp = (1.0f + velocity) / 2.0f;
@@ -550,8 +550,8 @@ void resetPressure()
 void simulateAdvection()
 {
 	int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
-	gpuErrchk(cudaBindTextureToArray(texture_float2_in, velocityBufferArray[inputVelocityBuffer], desc_float2));
-	texture_float2_in.filterMode = cudaFilterModeLinear;
+	gpuErrchk(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
+	texture_float2.filterMode = cudaFilterModeLinear;
 	//texture_float2_in.filterMode = cudaFilterModePoint;
 	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[nextBufferIndex]));
 
@@ -559,7 +559,7 @@ void simulateAdvection()
 										   velocityBuffer[inputVelocityBuffer],
 										   velocityBuffer[nextBufferIndex]);
 	gpuErrchk(cudaPeekAtLastError());
-	gpuErrchk(cudaUnbindTexture(texture_float2_in));
+	gpuErrchk(cudaUnbindTexture(texture_float2));
 	inputVelocityBuffer = nextBufferIndex;
 }
 
@@ -582,9 +582,9 @@ void simulateDiffusion()
 	{
 		int nextBufferIndex = (inputVelocityBuffer + 1) % 2;
 
-		gpuErrchk(cudaBindTextureToArray(texture_float2_in, velocityBufferArray[inputVelocityBuffer], desc_float2));
+		gpuErrchk(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
 		//texture_float2_in.filterMode = cudaFilterModeLinear;
-		texture_float2_in.filterMode = cudaFilterModePoint;
+		texture_float2.filterMode = cudaFilterModePoint;
 
 		gpuErrchk(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[nextBufferIndex]));
 		
@@ -593,7 +593,7 @@ void simulateDiffusion()
 											   velocityBuffer[nextBufferIndex]);
 
 		gpuErrchk(cudaPeekAtLastError());
-		gpuErrchk(cudaUnbindTexture(texture_float2_in));
+		gpuErrchk(cudaUnbindTexture(texture_float2));
 
 		inputVelocityBuffer = nextBufferIndex;
 	}
@@ -632,9 +632,9 @@ void simulateDensityAdvection()
 {
 	int nextBufferIndex = (inputDensityBuffer + 1) % 2;
 
-	gpuErrchk(cudaBindTextureToArray(texture_float2_in, velocityBufferArray[inputVelocityBuffer], desc_float2));
+	gpuErrchk(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
 	//texture_float2_in.filterMode = cudaFilterModeLinear;
-	texture_float2_in.filterMode = cudaFilterModePoint;
+	texture_float2.filterMode = cudaFilterModePoint;
 
 	gpuErrchk(cudaBindTextureToArray(texture_float4, densityBufferArray[inputDensityBuffer], desc_float4));
 	//texture_float2_in.filterMode = cudaFilterModeLinear;
@@ -647,7 +647,7 @@ void simulateDensityAdvection()
 												  densityBuffer[inputDensityBuffer],
 												  densityBuffer[nextBufferIndex]);
 	gpuErrchk(cudaPeekAtLastError());
-	gpuErrchk(cudaUnbindTexture(texture_float2_in));
+	gpuErrchk(cudaUnbindTexture(texture_float2));
 	gpuErrchk(cudaUnbindTexture(texture_float4));
 
 	inputDensityBuffer = nextBufferIndex;
@@ -693,8 +693,8 @@ void visualizationStep()
 		break;
 
 	case 1:
-		gpuErrchk(cudaBindTextureToArray(texture_float2_in, velocityBufferArray[inputVelocityBuffer], desc_float2));
-		texture_float2_in.filterMode = cudaFilterModePoint;
+		gpuErrchk(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
+		texture_float2.filterMode = cudaFilterModePoint;
 
 		//TODO VisualizationGPU?
 		visualizationVelocity <<<numBlocks, threadsPerBlock >> > (width, height,
@@ -702,7 +702,7 @@ void visualizationStep()
 														  gridResolution,
 														  velocityBuffer[inputVelocityBuffer]);
 		gpuErrchk(cudaPeekAtLastError());
-		gpuErrchk(cudaUnbindTexture(texture_float2_in));
+		gpuErrchk(cudaUnbindTexture(texture_float2));
 		break;
 
 	case 2:
