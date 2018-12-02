@@ -28,6 +28,7 @@ texture<float, 2, cudaReadModeElementType> texture_float_0;
 texture<float2, 2, cudaReadModeElementType> texture_float2;
 surface<void, 2> surface_out_1;
 surface<void, 2> surface_out_2;
+surface<void, 2> surface_out_3;
 texture<float4, 2, cudaReadModeElementType> texture_float4;
 cudaChannelFormatDesc desc_float = cudaCreateChannelDesc<float>();
 cudaChannelFormatDesc desc_float2 = cudaCreateChannelDesc<float2>();
@@ -48,10 +49,12 @@ void resetSimulationCUDA(const int gridResolution,
 	if(id.x < gridResolution && id.y < gridResolution)
 	{
 		surf2Dwrite(float2{ 0.0f, 0.0f }, surface_out_1, id.x * sizeof(float2), id.y);
+		surf2Dwrite(0.0f, surface_out_2, id.x * sizeof(float), id.y);
+		surf2Dwrite(float4{ 0.0f, 0.0f, 0.0f, 0.0f }, surface_out_3, id.x * sizeof(float4), id.y);
 
-		velocityBuffer[id.x + id.y * gridResolution] = float2{ 0.0f, 0.0f };
-		pressureBuffer[id.x + id.y * gridResolution] = 0.0f;
-		densityBuffer[id.x + id.y * gridResolution] = float4{ 0.0f, 0.0f, 0.0f, 0.0f };
+		//velocityBuffer[id.x + id.y * gridResolution] = float2{ 0.0f, 0.0f };
+		//pressureBuffer[id.x + id.y * gridResolution] = 0.0f;
+		//densityBuffer[id.x + id.y * gridResolution] = float4{ 0.0f, 0.0f, 0.0f, 0.0f };
 	}
 }
 
@@ -544,6 +547,8 @@ void initBuffers()
 void resetSimulation()
 {
 	gpuErrchk(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[inputVelocityBuffer]));
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_2, pressureBufferArray[inputPressureBuffer]));
+	gpuErrchk(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[inputDensityBuffer]));
 	resetSimulationCUDA<<<numBlocks, threadsPerBlock>>>(gridResolution,
 													 velocityBuffer[inputVelocityBuffer],
 													 pressureBuffer[inputPressureBuffer],
