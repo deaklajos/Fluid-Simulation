@@ -442,7 +442,7 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 // Buffers
 
 // simulation
-int gridResolution = 512;
+int gridResolution = 1024;
 dim3 threadsPerBlock(32, 32);
 dim3 numBlocks(gridResolution / threadsPerBlock.x, gridResolution / threadsPerBlock.y);
 
@@ -470,8 +470,8 @@ size_t problemSize[2];
 float2 force;
 
 // visualization
-int width = 512;
-int height = 512;
+int width = 1024;
+int height = 1024;
 
 float4* visualizationBufferGPU;
 cudaArray* visualizationBufferArrayGPU;
@@ -793,12 +793,13 @@ void initOpenGL()
 void display()
 {
 	static int i = 0;
-	if(++i > 10)
+	if(++i > 100)
 		glutLeaveMainLoop();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
+	addForce(512, 512, make_float2(1, 1));
 	simulationStep();
 	visualizationStep();
 
