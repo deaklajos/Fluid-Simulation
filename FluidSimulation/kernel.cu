@@ -14,6 +14,8 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 
+#include "IntelliSenseErrorFixer.hpp"
+
 // Kernels
 texture<float, 2, cudaReadModeElementType> texture_float_1;
 texture<float, 2, cudaReadModeElementType> texture_float_2;
