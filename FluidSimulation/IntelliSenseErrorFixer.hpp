@@ -11,13 +11,20 @@
 
 #if defined(ONINTELLISENSE)
 
+#define KERNEL_CALL(numBlocks, threadsPerBlock)
+
 // For some reason this redefine is required
-// Obviously nonesense but the CUDA compiler will not see it
-#define __host__ extern
-#define __device__ extern
-#define __global__ extern
-#define __shared__ extern
-#define __constant__ extern
-#define __managed__ extern
+#define __host__
+#define __device__
+#define __global__
+#define __shared__
+#define __constant__
+#define __managed__
 
 #endif /*  ONINTELLISENSE */
+
+#if !defined(ONINTELLISENSE)
+
+#define KERNEL_CALL(numBlocks, threadsPerBlock) <<<numBlocks,threadsPerBlock>>>
+
+#endif /*  not ONINTELLISENSE */
