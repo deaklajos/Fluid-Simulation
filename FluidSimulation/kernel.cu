@@ -435,8 +435,8 @@ void visualizationPressure(const int width, const int height, float4* visualizat
 // Buffers
 
 // simulation
-int gridResolution = 512;
-dim3 threadsPerBlock(32, 32);
+int gridResolution = 96;
+dim3 threadsPerBlock(8, 8);
 dim3 numBlocks(gridResolution / threadsPerBlock.x, gridResolution / threadsPerBlock.y);
 
 int inputVelocityBuffer = 0;
@@ -463,14 +463,14 @@ size_t problemSize[2];
 float2 force;
 
 // visualization
-int width = 512;
-int height = 512;
+int width = 96;
+int height = 96;
 
 float4* visualizationBufferGPU;
 cudaArray* visualizationBufferArrayGPU;
 float4* visualizationBufferCPU;
 
-int visualizationMethod = 0;
+int visualizationMethod = 1;
 
 size_t visualizationSize[2];
 
@@ -700,11 +700,11 @@ void addForce(int x, int y, float2 force)
 
 void simulationStep()
 {
-	simulateAdvection();
-	simulateDiffusion();
+	//simulateAdvection();
+	//simulateDiffusion();
 	//simulateVorticity();
-	projection();
-	simulateDensityAdvection();
+	//projection();
+	//simulateDensityAdvection();
 }
 
 void visualizationStep()
@@ -792,7 +792,7 @@ void display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
-	//addForce(512, 512, make_float2(1, 1));
+	addForce(gridResolution / 2, gridResolution / 2, make_float2(1, 1));
 	simulationStep();
 	visualizationStep();
 
@@ -879,9 +879,9 @@ void mouseMove(int x, int y)
 
 void reshape(int newWidth, int newHeight)
 {
-	width = newWidth;
-	height = newHeight;
-	glViewport(0, 0, width, height);
+	//width = newWidth;
+	//height = newHeight;
+	//glViewport(0, 0, width, height);
 }
 
 int main(int argc, char* argv[])
