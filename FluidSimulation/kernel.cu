@@ -299,25 +299,30 @@ void addVorticity(float* vorticityBuffer, float2* velocityBuffer)
 }
 
 __global__
-void divergence(float2* velocityBuffer, float* divergenceBuffer)
+void divergence(cudaTextureObject_t velocityBuffer, cudaSurfaceObject_t divergenceBuffer)
 {
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	//TODO border could solve this.
-	if (id.x > 0 && id.x < gridResolution - 1 &&
-		id.y > 0 && id.y < gridResolution - 1)
+	if (x > 0 && x < gridResolution - 1 &&
+		y > 0 && y < gridResolution - 1 &&
+		z > 0 && z < gridResolution - 1)
 	{
-		float2 vL = tex2D(texture_float2, id.x - 1 + 0.5f, id.y + 0.5f);
-		float2 vR = tex2D(texture_float2, id.x + 1 + 0.5f, id.y + 0.5f);
-		float2 vB = tex2D(texture_float2, id.x + 0.5f, id.y - 1 + 0.5f);
-		float2 vT = tex2D(texture_float2, id.x + 0.5f, id.y + 1 + 0.5f);
+		const float4 vL = tex3D<float4>(velocityBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float4 vR = tex3D<float4>(velocityBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float4 vB = tex3D<float4>(velocityBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+		const float4 vT = tex3D<float4>(velocityBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+		const float4 vN = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+		const float4 vF = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
-		float out = 0.5f * ((vR.x - vL.x) + (vT.y - vB.y));
-		surf2Dwrite(out, surface_out_1, id.x * sizeof(float), id.y);
+		// TODO 0.5f to 1/3?
+		const float out = 0.5f * ((vR.x - vL.x) + (vT.y - vB.y) + (vF.z - vN.z));
+		surf3Dwrite<float>(out, divergenceBuffer, x * sizeof(float4), y, z);
 	}
 	else
 	{
-		surf2Dwrite(0.0f, surface_out_1, id.x * sizeof(float), id.y);
+		surf3Dwrite<float>(0.0f, divergenceBuffer, x * sizeof(float4), y, z);
 	}
 }
 
@@ -479,7 +484,7 @@ int inputPressureBuffer = 0;
 float* pressureBuffer[2];
 cudaArray* pressureBufferArray[2];
 
-float* divergenceBuffer;
+TextureSurface3D* divergenceBuffer;
 cudaArray* divergenceBufferArray;
 
 float* vorticityBuffer;
@@ -525,7 +530,7 @@ void initBuffers()
 	checkCudaErrors(cudaMallocArray(&pressureBufferArray[0], &desc_float, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 	checkCudaErrors(cudaMallocArray(&pressureBufferArray[1], &desc_float, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 
-	checkCudaErrors(cudaMalloc(&divergenceBuffer, sizeof(float) * gridResolution * gridResolution));
+	divergenceBuffer = new TextureSurface3D(desc_float, gridResolution);
 	checkCudaErrors(cudaMallocArray(&divergenceBufferArray, &desc_float, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 
 	checkCudaErrors(cudaMalloc(&vorticityBuffer, sizeof(float) * gridResolution * gridResolution));
@@ -639,7 +644,9 @@ void projection()
 
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, divergenceBufferArray));
 
-	//divergence KERNEL_CALL(numBlocks, threadsPerBlock)( velocityBuffer[inputVelocityBuffer], divergenceBuffer);
+	divergence KERNEL_CALL(numBlocks, threadsPerBlock)(
+		velocityBuffer[inputVelocityBuffer]->getTexture(),
+		divergenceBuffer->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
 	checkCudaErrors(cudaUnbindTexture(texture_float2));
 
@@ -657,13 +664,13 @@ void projection()
 
 		checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, pressureBufferArray[nextBufferIndex]));
 
-		pressureJacobi KERNEL_CALL(numBlocks, threadsPerBlock)(
+		/*pressureJacobi KERNEL_CALL(numBlocks, threadsPerBlock)(
 			pressureBuffer[inputPressureBuffer],
 			pressureBuffer[nextBufferIndex],
 			divergenceBuffer);
 		checkCudaErrors(cudaPeekAtLastError());
 		checkCudaErrors(cudaUnbindTexture(texture_float_1));
-		checkCudaErrors(cudaUnbindTexture(texture_float_2));
+		checkCudaErrors(cudaUnbindTexture(texture_float_2));*/
 
 		inputPressureBuffer = nextBufferIndex;
 	}
@@ -736,7 +743,7 @@ void simulationStep()
 	simulateAdvection();
 	simulateDiffusion();
 	//simulateVorticity();
-	//projection();
+	projection();
 	//simulateDensityAdvection();
 }
 
@@ -942,13 +949,13 @@ int main(int argc, char* argv[])
 	glutMainLoop();
 
 	checkCudaErrors(cudaDeviceSynchronize());
-	checkCudaErrors(cudaFree(velocityBuffer[0]));
-	checkCudaErrors(cudaFree(velocityBuffer[1]));
+	delete velocityBuffer[0];
+	delete velocityBuffer[1];
 	checkCudaErrors(cudaFree(densityBuffer[0]));
 	checkCudaErrors(cudaFree(densityBuffer[1]));
 	checkCudaErrors(cudaFree(pressureBuffer[0]));
 	checkCudaErrors(cudaFree(pressureBuffer[1]));
-	checkCudaErrors(cudaFree(divergenceBuffer));
+	delete divergenceBuffer;
 	checkCudaErrors(cudaFree(vorticityBuffer));
 	checkCudaErrors(cudaFree(visualizationBufferGPU));
 	checkCudaErrors(cudaFreeHost(visualizationBufferCPU));
