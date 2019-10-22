@@ -316,13 +316,12 @@ void divergence(cudaTextureObject_t velocityBuffer, cudaSurfaceObject_t divergen
 		const float4 vN = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
 		const float4 vF = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
-		// TODO 0.5f to 1/3?
-		const float out = 0.5f * ((vR.x - vL.x) + (vT.y - vB.y) + (vF.z - vN.z));
-		surf3Dwrite<float>(out, divergenceBuffer, x * sizeof(float4), y, z);
+		const float out = (1 / 3.0f) * ((vR.x - vL.x) + (vT.y - vB.y) + (vF.z - vN.z));
+		surf3Dwrite<float>(out, divergenceBuffer, x * sizeof(float), y, z);
 	}
 	else
 	{
-		surf3Dwrite<float>(0.0f, divergenceBuffer, x * sizeof(float4), y, z);
+		surf3Dwrite<float>(0.0f, divergenceBuffer, x * sizeof(float), y, z);
 	}
 }
 
@@ -340,16 +339,17 @@ void pressureJacobi(cudaTextureObject_t inputPressureBuffer, cudaSurfaceObject_t
 		const float alpha = -1.0f;
 		const float beta = 1 / 6.0f;
 
-		const float vL = tex3D<float>(inputPressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
-		const float vR = tex3D<float>(inputPressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
-		const float vB = tex3D<float>(inputPressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
-		const float vT = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
-		const float vN = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
-		const float vF = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
+		// TODO this access redundant
+		const float pL = tex3D<float>(inputPressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float pR = tex3D<float>(inputPressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float pB = tex3D<float>(inputPressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+		const float pT = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+		const float pN = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+		const float pF = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
 		const float divergence = tex3D<float>(divergenceBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		const float out = (vL + vR + vB + vT + alpha * divergence) * beta;
+		const float out = (pL + pR + pB + pT + pN + pF + alpha * divergence) * beta;
 
 		surf3Dwrite(out, outputPressureBuffer, x * sizeof(float), y, z);
 	}
@@ -391,30 +391,66 @@ void pressureJacobi(cudaTextureObject_t inputPressureBuffer, cudaSurfaceObject_t
 }
 
 __global__
-void projectionCUDA(float2* inputVelocityBuffer, float* pressureBuffer, float2* outputVelocityBuffer)
+void projectionCUDA(cudaTextureObject_t inputVelocityBuffer, cudaTextureObject_t pressureBuffer, cudaSurfaceObject_t outputVelocityBuffer)
 {
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
-
-	if (id.x > 0 && id.x < gridResolution - 1 &&
-		id.y > 0 && id.y < gridResolution - 1)
+	if (x > 0 && x < gridResolution - 1 &&
+		y > 0 && y < gridResolution - 1 &&
+		z > 0 && z < gridResolution - 1)
 	{
-		float pL = tex2D(texture_float_1, id.x - 1 + 0.5f, id.y + 0.5f);
-		float pR = tex2D(texture_float_1, id.x + 1 + 0.5f, id.y + 0.5f);
-		float pB = tex2D(texture_float_1, id.x + 0.5f, id.y - 1 + 0.5f);
-		float pT = tex2D(texture_float_1, id.x + 0.5f, id.y + 1 + 0.5f);
+		// TODO this access redundant
+		const float pL = tex3D<float>(pressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float pR = tex3D<float>(pressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float pB = tex3D<float>(pressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+		const float pT = tex3D<float>(pressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+		const float pN = tex3D<float>(pressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+		const float pF = tex3D<float>(pressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
-		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
-		float2 out = velocity - float2{ pR - pL, pT - pB };
+		float4 velocity = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
+		float4 out = velocity - float4{ pR - pL, pT - pB, pF - pN, 0.0f };
 
-		surf2Dwrite(out, surface_out_1, id.x * sizeof(float2), id.y);
+		surf3Dwrite(out, outputVelocityBuffer, x * sizeof(float4), y, z);
 	}
 	else
 	{
-		if (id.x == 0) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
-		if (id.x == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2, id.x - 1, id.y), surface_out_1, id.x * sizeof(float2), id.y);
-		if (id.y == 0) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y + 1), surface_out_1, id.x * sizeof(float2), id.y);
-		if (id.y == gridResolution - 1) surf2Dwrite(-tex2D(texture_float2, id.x + 1, id.y - 1), surface_out_1, id.x * sizeof(float2), id.y);
+		if (x == 0)
+		{
+			// TODO Make Const
+			float4 element = tex3D<float4>(inputVelocityBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
+		else if (x == gridResolution - 1)
+		{
+			float4 element = tex3D<float4>(inputVelocityBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
+
+		if (y == 0)
+		{
+			// TODO Make Const
+			float4 element = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
+		else if (y == gridResolution - 1)
+		{
+			float4 element = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
+
+		if (z == 0)
+		{
+			// TODO Make Const
+			float4 element = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
+		else if (z == gridResolution - 1)
+		{
+			float4 element = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+			surf3Dwrite(-element, outputVelocityBuffer, x * sizeof(float4), y, z);
+		}
 	}
 }
 
@@ -475,7 +511,7 @@ void visualizationVelocity(float4* visualizationBuffer, cudaTextureObject_t velo
 		//const float4 velocity = surf3Dread<float4>(velocityBuffer, x * (int)sizeof(float4), y, z);
 
 		const float4 tmp = (1.0f + velocity) / 2.0f;
-		visualizationBuffer[x + y * gridResolution] = float4{ tmp.x, tmp.y, 0.0f, 0.0f };
+		visualizationBuffer[x + y * gridResolution] = float4{ tmp.x, tmp.y, tmp.z, 0.0f };
 	}
 }
 
@@ -595,9 +631,11 @@ void resetSimulation()
 
 void resetPressure()
 {
-	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[(inputVelocityBuffer + 1) % 2]));
-	checkCudaErrors(cudaBindSurfaceToArray(surface_out_2, pressureBufferArray[inputPressureBuffer]));
-	checkCudaErrors(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[(inputDensityBuffer + 1) % 2]));
+	//checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[(inputVelocityBuffer + 1) % 2]));
+	//checkCudaErrors(cudaBindSurfaceToArray(surface_out_2, pressureBufferArray[inputPressureBuffer]));
+	//checkCudaErrors(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[(inputDensityBuffer + 1) % 2]));
+
+	// TODO This could be made better
 	resetSimulationCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
 		velocityBuffer[(inputVelocityBuffer + 1) % 2]->getSurface(),
 		pressureBuffer[inputPressureBuffer]->getSurface(),
@@ -668,7 +706,6 @@ void simulateDiffusion()
 
 void projection()
 {
-
 	checkCudaErrors(cudaBindTextureToArray(texture_float2, velocityBufferArray[inputVelocityBuffer], desc_float2));
 	texture_float2.filterMode = cudaFilterModePoint;
 
@@ -715,10 +752,10 @@ void projection()
 
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[nextBufferIndex]));
 
-	/*projectionCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
-		velocityBuffer[inputVelocityBuffer],
-		pressureBuffer[inputPressureBuffer],
-		velocityBuffer[nextBufferIndex]);*/
+	projectionCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
+		velocityBuffer[inputVelocityBuffer]->getTexture(),
+		pressureBuffer[inputPressureBuffer]->getTexture(),
+		velocityBuffer[nextBufferIndex]->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
 	checkCudaErrors(cudaUnbindTexture(texture_float_1));
 	checkCudaErrors(cudaUnbindTexture(texture_float2));
@@ -773,7 +810,7 @@ void simulationStep()
 	simulateAdvection();
 	simulateDiffusion();
 	//simulateVorticity();
-	//projection();
+	projection();
 	//simulateDensityAdvection();
 }
 
