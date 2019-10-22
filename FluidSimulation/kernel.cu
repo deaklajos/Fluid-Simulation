@@ -43,8 +43,8 @@ __device__ int cnt = 0;
 __global__
 void resetSimulationCUDA(
 	cudaSurfaceObject_t velocityBuffer,
-	float* pressureBuffer,
-	float4* densityBuffer)
+	cudaSurfaceObject_t pressureBuffer,
+	cudaSurfaceObject_t densityBuffer)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -53,8 +53,8 @@ void resetSimulationCUDA(
 	if (x < gridResolution && y < gridResolution && z < gridResolution)
 	{
 		surf3Dwrite(make_float4(0.0f), velocityBuffer, x * sizeof(float4), y, z);
-		//surf2Dwrite(0.0f, surface_out_2, id.x * sizeof(float), id.y);
-		//surf2Dwrite(float4{ 0.0f, 0.0f, 0.0f, 0.0f }, surface_out_3, id.x * sizeof(float4), id.y);
+		surf3Dwrite(0.0f, pressureBuffer, x * sizeof(float), y, z);
+		surf3Dwrite(make_float4(0.0f), densityBuffer, x * sizeof(float4), y, z);
 	}
 }
 
@@ -388,7 +388,7 @@ void projectionCUDA(float2* inputVelocityBuffer, float* pressureBuffer, float2* 
 // TODO Do this in linear?
 __global__
 void addForceCUDA(float xIndex, float yIndex, float zIndex, const float4 force,
-	cudaSurfaceObject_t velocityBuffer, const float4 density, float4* densityBuffer)
+	cudaSurfaceObject_t velocityBuffer, const float4 density, cudaSurfaceObject_t densityBuffer)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -405,14 +405,11 @@ void addForceCUDA(float xIndex, float yIndex, float zIndex, const float4 force,
 	// TODO remove variable
 	//cnt = 0;
 
-	const float4 elemAtIndex = surf3Dread<float4>(velocityBuffer, x * (int)sizeof(float4), y, z);
-	surf3Dwrite(elemAtIndex + c * force, velocityBuffer, x * (int)sizeof(float4), y, z);
+	const float4 outVelocity = surf3Dread<float4>(velocityBuffer, x * (int)sizeof(float4), y, z);
+	surf3Dwrite(outVelocity + c * force, velocityBuffer, x * (int)sizeof(float4), y, z);
 
-	// TODO Maybe use texture?
-	// TODO 3D
-	//float4 temp4;
-	//surf2Dread(&temp4, surface_out_2, id.x * sizeof(float4), id.y);
-	//surf2Dwrite(temp4 + c * density, surface_out_2, id.x * sizeof(float4), id.y);
+	float4 outDensity = surf3Dread<float4>(densityBuffer, x * sizeof(float4), y, z);
+	surf3Dwrite(outDensity + c * density, densityBuffer, x * sizeof(float4), y, z);
 }
 
 // *************
@@ -476,12 +473,12 @@ TextureSurface3D* velocityBuffer[2];
 cudaArray* velocityBufferArray[2];
 
 int inputDensityBuffer = 0;
-float4* densityBuffer[2];
+TextureSurface3D* densityBuffer[2];
 cudaArray* densityBufferArray[2];
 float4 densityColor;
 
 int inputPressureBuffer = 0;
-float* pressureBuffer[2];
+TextureSurface3D* pressureBuffer[2];
 cudaArray* pressureBufferArray[2];
 
 TextureSurface3D* divergenceBuffer;
@@ -520,13 +517,13 @@ void initBuffers()
 	checkCudaErrors(cudaMallocArray(&velocityBufferArray[0], &desc_float2, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 	checkCudaErrors(cudaMallocArray(&velocityBufferArray[1], &desc_float2, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 
-	checkCudaErrors(cudaMalloc(&densityBuffer[0], sizeof(float4) * gridResolution * gridResolution));
-	checkCudaErrors(cudaMalloc(&densityBuffer[1], sizeof(float4) * gridResolution * gridResolution));
+	densityBuffer[0] = new TextureSurface3D(desc_float4, gridResolution);
+	densityBuffer[1] = new TextureSurface3D(desc_float4, gridResolution);
 	checkCudaErrors(cudaMallocArray(&densityBufferArray[0], &desc_float4, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 	checkCudaErrors(cudaMallocArray(&densityBufferArray[1], &desc_float4, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 
-	checkCudaErrors(cudaMalloc(&pressureBuffer[0], sizeof(float) * gridResolution * gridResolution));
-	checkCudaErrors(cudaMalloc(&pressureBuffer[1], sizeof(float) * gridResolution * gridResolution));
+	pressureBuffer[0] = new TextureSurface3D(desc_float, gridResolution);
+	pressureBuffer[1] = new TextureSurface3D(desc_float, gridResolution);
 	checkCudaErrors(cudaMallocArray(&pressureBufferArray[0], &desc_float, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 	checkCudaErrors(cudaMallocArray(&pressureBufferArray[1], &desc_float, gridResolution, gridResolution, cudaArraySurfaceLoadStore));
 
@@ -554,8 +551,8 @@ void resetSimulation()
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[inputDensityBuffer]));*/
 	resetSimulationCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
 		velocityBuffer[inputVelocityBuffer]->getSurface(),
-		pressureBuffer[inputPressureBuffer],
-		densityBuffer[inputDensityBuffer]);
+		pressureBuffer[inputPressureBuffer]->getSurface(),
+		densityBuffer[inputDensityBuffer]->getSurface());
 	//float f = 1.0f;
 
 	////checkCudaErrors(cuMemsetD32(*(velocityBuffer[inputVelocityBuffer]->getArray()), __float_as_int(0.0f), sizeof(float4) * gridResolution * gridResolution * gridResolution));
@@ -568,10 +565,10 @@ void resetPressure()
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[(inputVelocityBuffer + 1) % 2]));
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_2, pressureBufferArray[inputPressureBuffer]));
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_3, densityBufferArray[(inputDensityBuffer + 1) % 2]));
-	/*resetSimulationCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
-		velocityBuffer[(inputVelocityBuffer + 1) % 2],
-		pressureBuffer[inputPressureBuffer],
-		densityBuffer[(inputDensityBuffer + 1) % 2]);*/
+	resetSimulationCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
+		velocityBuffer[(inputVelocityBuffer + 1) % 2]->getSurface(),
+		pressureBuffer[inputPressureBuffer]->getSurface(),
+		densityBuffer[(inputDensityBuffer + 1) % 2]->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
 }
 
@@ -644,11 +641,11 @@ void projection()
 
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, divergenceBufferArray));
 
-	divergence KERNEL_CALL(numBlocks, threadsPerBlock)(
+	/*divergence KERNEL_CALL(numBlocks, threadsPerBlock)(
 		velocityBuffer[inputVelocityBuffer]->getTexture(),
 		divergenceBuffer->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
-	checkCudaErrors(cudaUnbindTexture(texture_float2));
+	checkCudaErrors(cudaUnbindTexture(texture_float2));*/
 
 	resetPressure();
 
@@ -734,7 +731,7 @@ void addForce(int x, int y, float3 force)
 	addForceCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
 		fx, fy, fz, force4,
 		velocityBuffer[inputVelocityBuffer]->getSurface(),
-		densityColor, densityBuffer[inputDensityBuffer]);
+		densityColor, densityBuffer[inputDensityBuffer]->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
 }
 
@@ -743,7 +740,7 @@ void simulationStep()
 	simulateAdvection();
 	simulateDiffusion();
 	//simulateVorticity();
-	projection();
+	//projection();
 	//simulateDensityAdvection();
 }
 
@@ -755,11 +752,11 @@ void visualizationStep()
 		checkCudaErrors(cudaBindTextureToArray(texture_float4, densityBufferArray[inputDensityBuffer], desc_float4));
 		texture_float4.filterMode = cudaFilterModePoint;
 
-		visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
+		/*visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]);
 		checkCudaErrors(cudaPeekAtLastError());
-		checkCudaErrors(cudaUnbindTexture(texture_float4));
+		checkCudaErrors(cudaUnbindTexture(texture_float4));*/
 		break;
 
 	case 1:
@@ -779,11 +776,11 @@ void visualizationStep()
 		texture_float_1.filterMode = cudaFilterModePoint;
 
 
-		visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
+		/*visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
 			visualizationBufferGPU,
 			pressureBuffer[inputPressureBuffer]);
 		checkCudaErrors(cudaPeekAtLastError());
-		checkCudaErrors(cudaUnbindTexture(texture_float_1));
+		checkCudaErrors(cudaUnbindTexture(texture_float_1));*/
 		break;
 	}
 
@@ -949,12 +946,16 @@ int main(int argc, char* argv[])
 	glutMainLoop();
 
 	checkCudaErrors(cudaDeviceSynchronize());
+
 	delete velocityBuffer[0];
 	delete velocityBuffer[1];
-	checkCudaErrors(cudaFree(densityBuffer[0]));
-	checkCudaErrors(cudaFree(densityBuffer[1]));
-	checkCudaErrors(cudaFree(pressureBuffer[0]));
-	checkCudaErrors(cudaFree(pressureBuffer[1]));
+
+	delete densityBuffer[0];
+	delete densityBuffer[1];
+
+	delete pressureBuffer[0];
+	delete pressureBuffer[1];
+
 	delete divergenceBuffer;
 	checkCudaErrors(cudaFree(vorticityBuffer));
 	checkCudaErrors(cudaFree(visualizationBufferGPU));
