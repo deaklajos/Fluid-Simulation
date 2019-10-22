@@ -209,34 +209,38 @@ __global__ void myprint()
 }
 
 __global__
-void diffusion(float2* inputVelocityBuffer, float2* outputVelocityBuffer)
+void diffusion(cudaTextureObject_t inputVelocityBuffer, cudaSurfaceObject_t outputVelocityBuffer)
 {
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const float viscousity = 0.01f;
+	const float alpha = 1.0f / (viscousity * dt);
+	const float beta = 1.0f / (6.0f + alpha);
 
-	float viscousity = 0.01f;
-	float alpha = 1.0f / (viscousity * dt);
-	float beta = 1.0f / (4.0f + alpha);
-
-	if (id.x > 0 && id.x < gridResolution - 1 &&
-		id.y > 0 && id.y < gridResolution - 1)
+	if (x > 0 && x < gridResolution - 1 &&
+		y > 0 && y < gridResolution - 1 &&
+		z > 0 && z < gridResolution - 1)
 	{
-		float2 vL = tex2D(texture_float2, id.x - 1 + 0.5f, id.y + 0.5f);
-		float2 vR = tex2D(texture_float2, id.x + 1 + 0.5f, id.y + 0.5f);
-		float2 vB = tex2D(texture_float2, id.x + 0.5f, id.y - 1 + 0.5f);
-		float2 vT = tex2D(texture_float2, id.x + 0.5f, id.y + 1 + 0.5f);
+		const float4 vL = tex3D<float4>(inputVelocityBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float4 vR = tex3D<float4>(inputVelocityBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float4 vB = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+		const float4 vT = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+		const float4 vN = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+		const float4 vF = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
-		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
+		const float4 velocity = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		float2 out = (vL + vR + vB + vT + alpha * velocity) * beta;
+		const float4 out = (vL + vR + vB + vT + vN + vF + alpha * velocity) * beta;
 
-		surf2Dwrite(out, surface_out_1, id.x * sizeof(float2), id.y);
+		surf3Dwrite<float4>(out, outputVelocityBuffer, x * sizeof(float4), y, z);
 	}
 	else
 	{
-		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
+		const float4 velocity = tex3D<float4>(inputVelocityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		surf2Dwrite(velocity, surface_out_1, id.x * sizeof(float2), id.y);
+		surf3Dwrite<float4>(velocity, outputVelocityBuffer, x * sizeof(float4), y, z);
 	}
 }
 
@@ -616,7 +620,9 @@ void simulateDiffusion()
 
 		checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, velocityBufferArray[nextBufferIndex]));
 
-		//diffusion KERNEL_CALL(numBlocks, threadsPerBlock)( velocityBuffer[inputVelocityBuffer], velocityBuffer[nextBufferIndex]);
+		diffusion KERNEL_CALL(numBlocks, threadsPerBlock)(
+			velocityBuffer[inputVelocityBuffer]->getTexture(),
+			velocityBuffer[nextBufferIndex]->getSurface());
 
 		checkCudaErrors(cudaPeekAtLastError());
 		checkCudaErrors(cudaUnbindTexture(texture_float2));
@@ -728,7 +734,7 @@ void addForce(int x, int y, float3 force)
 void simulationStep()
 {
 	simulateAdvection();
-	//simulateDiffusion();
+	simulateDiffusion();
 	//simulateVorticity();
 	//projection();
 	//simulateDensityAdvection();
