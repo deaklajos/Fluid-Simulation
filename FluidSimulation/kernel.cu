@@ -327,33 +327,66 @@ void divergence(cudaTextureObject_t velocityBuffer, cudaSurfaceObject_t divergen
 }
 
 __global__
-void pressureJacobi(float* inputPressureBuffer, float* outputPressureBuffer, float* divergenceBuffer)
+void pressureJacobi(cudaTextureObject_t inputPressureBuffer, cudaSurfaceObject_t outputPressureBuffer, cudaTextureObject_t divergenceBuffer)
 {
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	if (id.x > 0 && id.x < gridResolution - 1 &&
-		id.y > 0 && id.y < gridResolution - 1)
+	if (x > 0 && x < gridResolution - 1 &&
+		y > 0 && y < gridResolution - 1 &&
+		z > 0 && z < gridResolution - 1)
 	{
-		float alpha = -1.0f;
-		float beta = 0.25f;
+		const float alpha = -1.0f;
+		const float beta = 1 / 6.0f;
 
-		float vL = tex2D(texture_float_1, id.x - 1 + 0.5f, id.y + 0.5f);
-		float vR = tex2D(texture_float_1, id.x + 1 + 0.5f, id.y + 0.5f);
-		float vB = tex2D(texture_float_1, id.x + 0.5f, id.y - 1 + 0.5f);
-		float vT = tex2D(texture_float_1, id.x + 0.5f, id.y + 1 + 0.5f);
+		const float vL = tex3D<float>(inputPressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float vR = tex3D<float>(inputPressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+		const float vB = tex3D<float>(inputPressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+		const float vT = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+		const float vN = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+		const float vF = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
 
-		float divergence = tex2D(texture_float_2, id.x + 0.5f, id.y + 0.5f);
+		const float divergence = tex3D<float>(divergenceBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		float out = (vL + vR + vB + vT + alpha * divergence) * beta;
+		const float out = (vL + vR + vB + vT + alpha * divergence) * beta;
 
-		surf2Dwrite(out, surface_out_1, id.x * sizeof(float), id.y);
+		surf3Dwrite(out, outputPressureBuffer, x * sizeof(float), y, z);
 	}
 	else
 	{
-		if (id.x == 0) surf2Dwrite(-tex2D(texture_float_1, id.x + 1, id.y), surface_out_1, id.x * sizeof(float), id.y);
-		if (id.x == gridResolution - 1) surf2Dwrite(-tex2D(texture_float_1, id.x - 1, id.y), surface_out_1, id.x * sizeof(float), id.y);
-		if (id.y == 0) surf2Dwrite(-tex2D(texture_float_1, id.x, id.y + 1), surface_out_1, id.x * sizeof(float), id.y);
-		if (id.y == gridResolution - 1) surf2Dwrite(-tex2D(texture_float_1, id.x, id.y - 1), surface_out_1, id.x * sizeof(float), id.y);
+		if (x == 0)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
+		else if (x == gridResolution - 1)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
+
+		if (y == 0)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
+		else if (y == gridResolution - 1)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
+
+		if (z == 0)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
+		else if (z == gridResolution - 1)
+		{
+			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
+			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+		}
 	}
 }
 
@@ -641,11 +674,11 @@ void projection()
 
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, divergenceBufferArray));
 
-	/*divergence KERNEL_CALL(numBlocks, threadsPerBlock)(
+	divergence KERNEL_CALL(numBlocks, threadsPerBlock)(
 		velocityBuffer[inputVelocityBuffer]->getTexture(),
 		divergenceBuffer->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
-	checkCudaErrors(cudaUnbindTexture(texture_float2));*/
+	checkCudaErrors(cudaUnbindTexture(texture_float2));
 
 	resetPressure();
 
@@ -661,13 +694,13 @@ void projection()
 
 		checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, pressureBufferArray[nextBufferIndex]));
 
-		/*pressureJacobi KERNEL_CALL(numBlocks, threadsPerBlock)(
-			pressureBuffer[inputPressureBuffer],
-			pressureBuffer[nextBufferIndex],
-			divergenceBuffer);
+		pressureJacobi KERNEL_CALL(numBlocks, threadsPerBlock)(
+			pressureBuffer[inputPressureBuffer]->getTexture(),
+			pressureBuffer[nextBufferIndex]->getSurface(),
+			divergenceBuffer->getTexture());
 		checkCudaErrors(cudaPeekAtLastError());
 		checkCudaErrors(cudaUnbindTexture(texture_float_1));
-		checkCudaErrors(cudaUnbindTexture(texture_float_2));*/
+		checkCudaErrors(cudaUnbindTexture(texture_float_2));
 
 		inputPressureBuffer = nextBufferIndex;
 	}
