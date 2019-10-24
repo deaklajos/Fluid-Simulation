@@ -490,14 +490,16 @@ void addForceCUDA(float xIndex, float yIndex, float zIndex, const float4 force,
 // *************
 
 __global__
-void visualizationDensity(const int width, const int height, float4* visualizationBuffer, float4* densityBuffer)
+void visualizationDensity(float4* visualizationBuffer, cudaTextureObject_t densityBuffer)
 {
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	if (id.x < width && id.y < height)
+	if (x < gridResolution && y < gridResolution && z == gridResolution / 2)
 	{
-		float4 density = tex2D(texture_float4, id.x, id.y);
-		visualizationBuffer[id.x + id.y * width] = density;
+		const float4 density = tex3D<float4>(densityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
+		visualizationBuffer[x + y * gridResolution] = density;
 	}
 }
 
@@ -827,11 +829,11 @@ void visualizationStep()
 		checkCudaErrors(cudaBindTextureToArray(texture_float4, densityBufferArray[inputDensityBuffer], desc_float4));
 		texture_float4.filterMode = cudaFilterModePoint;
 
-		/*visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
+		visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
 			visualizationBufferGPU,
-			densityBuffer[inputDensityBuffer]);
+			densityBuffer[inputDensityBuffer]->getTexture());
 		checkCudaErrors(cudaPeekAtLastError());
-		checkCudaErrors(cudaUnbindTexture(texture_float4));*/
+		checkCudaErrors(cudaUnbindTexture(texture_float4));
 		break;
 
 	case 1:
