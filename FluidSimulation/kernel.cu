@@ -182,23 +182,27 @@ void advection(cudaTextureObject_t inputVelocityBuffer, cudaSurfaceObject_t outp
 }
 
 __global__
-void advectionDensity(float2* velocityBuffer, float4* inputDensityBuffer, float4* outputDensityBuffer)
+void advectionDensity(cudaTextureObject_t velocityBuffer, cudaTextureObject_t inputDensityBuffer, cudaSurfaceObject_t outputDensityBuffer)
 {
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	if (id.x > 0 && id.x < gridResolution - 1 &&
-		id.y > 0 && id.y < gridResolution - 1)
+	if (x > 0 && x < gridResolution - 1 &&
+		y > 0 && y < gridResolution - 1 &&
+		z > 0 && z < gridResolution - 1)
 	{
-		float2 velocity = tex2D(texture_float2, id.x + 0.5f, id.y + 0.5f);
+		const float4 velocity = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		float2 p = float2{ (float)id.x - dt * velocity.x, (float)id.y - dt * velocity.y };
+		float4 p = float4{ (float)x - dt * velocity.x, (float)y - dt * velocity.y, (float)z - dt * velocity.z, 0.0f};
 
-		p = clamp(p, make_float2(0.0f), make_float2(gridResolution));
-		surf2Dwrite(tex2D(texture_float4, p.x + 0.5f, p.y + 0.5f), surface_out_1, id.x * sizeof(float4), id.y);
+		p = clamp(p, make_float4(0.0f), make_float4(gridResolution));
+		const float4 element = tex3D<float4>(inputDensityBuffer, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f);
+		surf3Dwrite(element, outputDensityBuffer, x * sizeof(float4), y, z);
 	}
 	else
 	{
-		surf2Dwrite(float4{ 0.0f,  0.0f,  0.0f,  0.0f }, surface_out_1, id.x * sizeof(float4), id.y);
+		surf3Dwrite(make_float4(0.0f), outputDensityBuffer, x * sizeof(float4), y, z);
 	}
 }
 
@@ -719,6 +723,7 @@ void projection()
 
 	resetPressure();
 
+	// TODO Could This be done on the kernel level?
 	for (int i = 0; i < 10; ++i)
 	{
 		int nextBufferIndex = (inputPressureBuffer + 1) % 2;
@@ -775,10 +780,10 @@ void simulateDensityAdvection()
 
 	checkCudaErrors(cudaBindSurfaceToArray(surface_out_1, densityBufferArray[nextBufferIndex]));
 
-	/*advectionDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
-		velocityBuffer[inputVelocityBuffer],
-		densityBuffer[inputDensityBuffer],
-		densityBuffer[nextBufferIndex]);*/
+	advectionDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
+		velocityBuffer[inputVelocityBuffer]->getTexture(),
+		densityBuffer[inputDensityBuffer]->getTexture(),
+		densityBuffer[nextBufferIndex]->getSurface());
 	checkCudaErrors(cudaPeekAtLastError());
 	checkCudaErrors(cudaUnbindTexture(texture_float2));
 	checkCudaErrors(cudaUnbindTexture(texture_float4));
@@ -811,7 +816,7 @@ void simulationStep()
 	simulateDiffusion();
 	//simulateVorticity();
 	projection();
-	//simulateDensityAdvection();
+	simulateDensityAdvection();
 }
 
 void visualizationStep()
