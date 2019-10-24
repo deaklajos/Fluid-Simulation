@@ -522,15 +522,17 @@ void visualizationVelocity(float4* visualizationBuffer, cudaTextureObject_t velo
 }
 
 __global__
-void visualizationPressure(const int width, const int height, float4* visualizationBuffer, float* pressureBuffer)
+void visualizationPressure(float4* visualizationBuffer, cudaTextureObject_t pressureBuffer)
 {
-	uint2 id{ blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y };
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	if (id.x < width && id.y < height)
+	if (x < gridResolution && y < gridResolution && z == gridResolution / 2)
 	{
-		float pressure = tex2D(texture_float_1, id.x, id.y);
+		const float pressure = tex3D<float>(pressureBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
 
-		visualizationBuffer[id.x + id.y * width] = make_float4((1.0f + pressure) / 2.0f);
+		visualizationBuffer[x + y * gridResolution] = make_float4((1.0f + pressure) / 2.0f);
 	}
 }
 
@@ -853,11 +855,11 @@ void visualizationStep()
 		texture_float_1.filterMode = cudaFilterModePoint;
 
 
-		/*visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(width, height,
+		visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(
 			visualizationBufferGPU,
-			pressureBuffer[inputPressureBuffer]);
+			pressureBuffer[inputPressureBuffer]->getTexture());
 		checkCudaErrors(cudaPeekAtLastError());
-		checkCudaErrors(cudaUnbindTexture(texture_float_1));*/
+		checkCudaErrors(cudaUnbindTexture(texture_float_1));
 		break;
 	}
 
