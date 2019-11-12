@@ -617,7 +617,7 @@ TextureSurface3D* pressureBuffer[2];
 TextureSurface3D* divergenceBuffer;
 float* vorticityBuffer;
 
-float3 force;
+float2 force;
 
 // visualization
 int width = gridResolution;
@@ -766,14 +766,19 @@ void simulateDensityAdvection()
 	inputDensityBuffer = nextBufferIndex;
 }
 
-void addForce(int x, int y, float3 force)
+const float3 lookUp{ 0.0f, 0.0f, 1.0f };
+float3 lookRight{ 0.0f, 1.0f, 0.0f };
+
+void addForce(int x, int y, float2 force)
 {
-	// TODO Give meaning to this
 	float fx = (float)x / width;
 	float fy = (float)y / height;
 	float fz = (float)y / height;
 
-	float4 force4{ force.x, force.y, force.z, 0.0 };
+	float3 forceInCube = force.x * lookRight + force.y * lookUp;
+
+	
+	float4 force4 = make_float4(forceInCube, 0.0f);
 
 	addForceCUDA KERNEL_CALL(numBlocks, threadsPerBlock)(
 		fx, fy, fz, force4,
@@ -794,49 +799,10 @@ void simulationStep()
 float distance = 3.0f;
 float rotation = 0.0f;
 
-//struct mat4 {
-//	float m[4][4];
-//public:
-//	mat4() {}
-//	mat4(float m00, float m01, float m02, float m03,
-//		float m10, float m11, float m12, float m13,
-//		float m20, float m21, float m22, float m23,
-//		float m30, float m31, float m32, float m33) {
-//		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
-//		m[1][0] = m10; m[1][1] = m11; m[1][2] = m12; m[1][3] = m13;
-//		m[2][0] = m20; m[2][1] = m21; m[2][2] = m22; m[2][3] = m23;
-//		m[3][0] = m30; m[3][1] = m31; m[3][2] = m32; m[3][3] = m33;
-//	}
-//
-//	mat4 operator*(const mat4& right) const {
-//		mat4 result;
-//		for (int i = 0; i < 4; i++) {
-//			for (int j = 0; j < 4; j++) {
-//				result.m[i][j] = 0;
-//				for (int k = 0; k < 4; k++) result.m[i][j] += m[i][k] * right.m[k][j];
-//			}
-//		}
-//		return result;
-//	}
-//};
-//
-//float4 operator*(const float4 vec, const mat4& mat)
-//{
-//	return float4
-//	{
-//		vec.x * mat.m[0][0] + vec.y * mat.m[1][0] + vec.z * mat.m[2][0] + vec.w * mat.m[3][0],
-//		vec.x * mat.m[0][1] + vec.y * mat.m[1][1] + vec.z * mat.m[2][1] + vec.w * mat.m[3][1],
-//		vec.x * mat.m[0][2] + vec.y * mat.m[1][2] + vec.z * mat.m[2][2] + vec.w * mat.m[3][2],
-//		vec.x * mat.m[0][3] + vec.y * mat.m[1][3] + vec.z * mat.m[2][3] + vec.w * mat.m[3][3]
-//	};
-//}
-
-
 void visualizationStep()
 {
 	const float3 startingPoint{ distance, 0.0f, 0.0f };
 	const float3 startLookDirection{ -1.0f, 0.0f, 0.0f };
-	const float3 lookUp{ 0.0f, 0.0f, 1.0f };
 	const float3 startLookRight{ 0.0f, 1.0f, 0.0f };
 
 	float3 point = make_float3(0.0f);
@@ -849,7 +815,7 @@ void visualizationStep()
 	lookDirection.x = startLookDirection.x * cosf(rotation) - startLookDirection.y * sinf(rotation);
 	lookDirection.y = startLookDirection.x * sinf(rotation) + startLookDirection.y * cosf(rotation);
 
-	float3 lookRight = make_float3(0.0f);
+	//float3 lookRight = make_float3(0.0f);
 	lookRight.x = startLookRight.x * cosf(rotation) - startLookRight.y * sinf(rotation);
 	lookRight.y = startLookRight.x * sinf(rotation) + startLookRight.y * cosf(rotation);
 
@@ -1017,7 +983,6 @@ void mouseMove(int x, int y)
 {
 	force.x = (float)(x - mX);
 	force.y = -(float)(y - mY);
-	force.z = 0.0f;
 	//addForce(mX, height - mY, force); //old
 	addForce(height / 2, width / 2, force);
 	mX = x;
