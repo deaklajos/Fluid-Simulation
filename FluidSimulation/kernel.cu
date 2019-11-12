@@ -495,6 +495,57 @@ void visualizationDensity(float4* visualizationBuffer, cudaTextureObject_t densi
 	}
 }
 
+__device__ bool rayBoxIntersect(float3 rpos, float3 rdir, float3 vmin, float3 vmax, float& nearIntersection, float& farIntersection)
+{
+	float t[7];
+	t[1] = (vmin.x - rpos.x) / rdir.x;
+	t[2] = (vmax.x - rpos.x) / rdir.x;
+	t[3] = (vmin.y - rpos.y) / rdir.y;
+	t[4] = (vmax.y - rpos.y) / rdir.y;
+	t[5] = (vmin.z - rpos.z) / rdir.z;
+	t[6] = (vmax.z - rpos.z) / rdir.z;
+	nearIntersection = fmax(fmax(fmin(t[1], t[2]), fmin(t[3], t[4])), fmin(t[5], t[6]));
+	farIntersection = fmin(fmin(fmax(t[1], t[2]), fmax(t[3], t[4])), fmax(t[5], t[6]));
+	return (farIntersection < 0 || nearIntersection > farIntersection) ? false : true;
+}
+
+__global__
+void visualizationDensity3D(
+	float4* visualizationBuffer,
+	cudaTextureObject_t densityBuffer,
+	float3 lookPoint,
+	float3 lookDirection,
+	float3 lookUp,
+	float3 lookRight)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < gridResolution && y < gridResolution)
+	{
+		const float cameraSize = 1.0f;
+		float right = (((float)(x + 1) / gridResolution) - 0.5f) * cameraSize;
+		float up = (((float)(y + 1) / gridResolution) - 0.5f) * cameraSize;
+		float3 thispoint = lookPoint + lookUp * up + lookRight * right;
+
+		float3 boxMin{ 0.0f, 0.0f, 0.0f };
+		float3 boxMax{ 1.0f, 1.0f, 1.0f };
+
+		float nearIntersection;
+		float farIntersection;
+
+		bool isHit = rayBoxIntersect(thispoint, lookDirection, boxMin, boxMax, nearIntersection, farIntersection);
+
+		float4 resultDensity = make_float4(0.0f);
+		for (float i = nearIntersection; i < farIntersection; i += (1.0f / gridResolution))
+		{
+			float3 pointInBox = thispoint + lookDirection * i;
+			resultDensity += tex3D<float4>(densityBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
+		}
+		visualizationBuffer[x + y * gridResolution] = resultDensity;
+	}
+}
+
 // TODO 3D
 __global__
 void visualizationVelocity(float4* visualizationBuffer, cudaTextureObject_t velocityBuffer)
@@ -512,6 +563,22 @@ void visualizationVelocity(float4* visualizationBuffer, cudaTextureObject_t velo
 		visualizationBuffer[x + y * gridResolution] = float4{ tmp.x, tmp.y, tmp.z, 0.0f };
 	}
 }
+
+//__global__
+//void visualizationVelocity3D(float4* visualizationBuffer, cudaTextureObject_t velocityBuffer)
+//{
+//	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+//	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+//
+//	if (x < gridResolution && y < gridResolution && z == gridResolution / 2)
+//	{
+//		const float4 velocity = tex3D<float4>(velocityBuffer, x + 0.5f, y + 0.5f, z + 0.5f);
+//		//const float4 velocity = surf3Dread<float4>(velocityBuffer, x * (int)sizeof(float4), y, z);
+//
+//		const float4 tmp = (1.0f + velocity) / 2.0f;
+//		visualizationBuffer[x + y * gridResolution] = float4{ tmp.x, tmp.y, tmp.z, 0.0f };
+//	}
+//}
 
 __global__
 void visualizationPressure(float4* visualizationBuffer, cudaTextureObject_t pressureBuffer)
@@ -724,34 +791,105 @@ void simulationStep()
 	simulateDensityAdvection();
 }
 
+float distance = 3.0f;
+float rotation = 0.0f;
+
+//struct mat4 {
+//	float m[4][4];
+//public:
+//	mat4() {}
+//	mat4(float m00, float m01, float m02, float m03,
+//		float m10, float m11, float m12, float m13,
+//		float m20, float m21, float m22, float m23,
+//		float m30, float m31, float m32, float m33) {
+//		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
+//		m[1][0] = m10; m[1][1] = m11; m[1][2] = m12; m[1][3] = m13;
+//		m[2][0] = m20; m[2][1] = m21; m[2][2] = m22; m[2][3] = m23;
+//		m[3][0] = m30; m[3][1] = m31; m[3][2] = m32; m[3][3] = m33;
+//	}
+//
+//	mat4 operator*(const mat4& right) const {
+//		mat4 result;
+//		for (int i = 0; i < 4; i++) {
+//			for (int j = 0; j < 4; j++) {
+//				result.m[i][j] = 0;
+//				for (int k = 0; k < 4; k++) result.m[i][j] += m[i][k] * right.m[k][j];
+//			}
+//		}
+//		return result;
+//	}
+//};
+//
+//float4 operator*(const float4 vec, const mat4& mat)
+//{
+//	return float4
+//	{
+//		vec.x * mat.m[0][0] + vec.y * mat.m[1][0] + vec.z * mat.m[2][0] + vec.w * mat.m[3][0],
+//		vec.x * mat.m[0][1] + vec.y * mat.m[1][1] + vec.z * mat.m[2][1] + vec.w * mat.m[3][1],
+//		vec.x * mat.m[0][2] + vec.y * mat.m[1][2] + vec.z * mat.m[2][2] + vec.w * mat.m[3][2],
+//		vec.x * mat.m[0][3] + vec.y * mat.m[1][3] + vec.z * mat.m[2][3] + vec.w * mat.m[3][3]
+//	};
+//}
+
+
 void visualizationStep()
 {
-	switch (visualizationMethod)
-	{
-	case 0:
-		visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
+	const float3 startingPoint{ distance, 0.0f, 0.0f };
+	const float3 startLookDirection{ -1.0f, 0.0f, 0.0f };
+	const float3 lookUp{ 0.0f, 0.0f, 1.0f };
+	const float3 startLookRight{ 0.0f, 1.0f, 0.0f };
+
+	float3 point = make_float3(0.0f);
+	point.x = startingPoint.x * cosf(rotation) - startingPoint.y * sinf(rotation);
+	point.y = startingPoint.x * sinf(rotation) + startingPoint.y * cosf(rotation);
+
+	point += make_float3(0.5f);
+
+	float3 lookDirection = make_float3(0.0f);
+	lookDirection.x = startLookDirection.x * cosf(rotation) - startLookDirection.y * sinf(rotation);
+	lookDirection.y = startLookDirection.x * sinf(rotation) + startLookDirection.y * cosf(rotation);
+
+	float3 lookRight = make_float3(0.0f);
+	lookRight.x = startLookRight.x * cosf(rotation) - startLookRight.y * sinf(rotation);
+	lookRight.y = startLookRight.x * sinf(rotation) + startLookRight.y * cosf(rotation);
+
+
+	//switch (visualizationMethod)
+	//{
+	//case 0:
+		/*visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
 			visualizationBufferGPU,
-			densityBuffer[inputDensityBuffer]->getTexture());
+			densityBuffer[inputDensityBuffer]->getTexture());*/
+
+	dim3 threadsPerBlockVisualization(8, 8);
+	dim3 numBlocksVisualization(gridResolution / threadsPerBlockVisualization.x, gridResolution / threadsPerBlockVisualization.y);
+		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
+			visualizationBufferGPU,
+			densityBuffer[inputDensityBuffer]->getTexture(),
+			point,
+			lookDirection,
+			lookUp,
+			lookRight);
 
 		checkCudaErrors(cudaPeekAtLastError());
-		break;
+	//	break;
 
-	case 1:
-		visualizationVelocity KERNEL_CALL(numBlocks, threadsPerBlock)(
-			visualizationBufferGPU,
-			velocityBuffer[inputVelocityBuffer]->getTexture());
+	//case 1:
+	//	visualizationVelocity KERNEL_CALL(numBlocks, threadsPerBlock)(
+	//		visualizationBufferGPU,
+	//		velocityBuffer[inputVelocityBuffer]->getTexture());
 
-		checkCudaErrors(cudaPeekAtLastError());
-		break;
+	//	checkCudaErrors(cudaPeekAtLastError());
+	//	break;
 
-	case 2:
-		visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(
-			visualizationBufferGPU,
-			pressureBuffer[inputPressureBuffer]->getTexture());
+	//case 2:
+	//	visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(
+	//		visualizationBufferGPU,
+	//		pressureBuffer[inputPressureBuffer]->getTexture());
 
-		checkCudaErrors(cudaPeekAtLastError());
-		break;
-	}
+	//	checkCudaErrors(cudaPeekAtLastError());
+	//	break;
+	//}
 
 	checkCudaErrors(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
 
@@ -795,7 +933,7 @@ void display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
-	addForce(gridResolution / 2, gridResolution / 2, make_float3(1, 1, 0));
+	//addForce(gridResolution / 2, gridResolution / 2, make_float3(1, 1, 1));
 	simulationStep();
 	visualizationStep();
 
@@ -811,6 +949,11 @@ void idle()
 void keyDown(unsigned char key, int x, int y)
 {
 	keysPressed[key] = true;
+
+	if (key == 'a')
+		rotation += 0.01f;
+	else if (key == 'd')
+		rotation -= 0.01f;
 }
 
 void keyUp(unsigned char key, int x, int y)
