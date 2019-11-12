@@ -509,6 +509,9 @@ __device__ bool rayBoxIntersect(float3 rpos, float3 rdir, float3 vmin, float3 vm
 	return (farIntersection < 0 || nearIntersection > farIntersection) ? false : true;
 }
 
+#define width (gridResolution * 4)
+#define height (gridResolution * 4)
+
 __global__
 void visualizationDensity3D(
 	float4* visualizationBuffer,
@@ -521,11 +524,11 @@ void visualizationDensity3D(
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (x < gridResolution && y < gridResolution)
+	if (x < width && y < height)
 	{
 		const float cameraSize = 1.0f;
-		float right = (((float)(x + 1) / gridResolution) - 0.5f) * cameraSize;
-		float up = (((float)(y + 1) / gridResolution) - 0.5f) * cameraSize;
+		float right = (((float)(x + 1) / width) - 0.5f) * cameraSize;
+		float up = (((float)(y + 1) / height) - 0.5f) * cameraSize;
 		float3 thispoint = lookPoint + lookUp * up + lookRight * right;
 
 		float3 boxMin{ 0.0f, 0.0f, 0.0f };
@@ -542,7 +545,7 @@ void visualizationDensity3D(
 			float3 pointInBox = thispoint + lookDirection * i;
 			resultDensity += tex3D<float4>(densityBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
 		}
-		visualizationBuffer[x + y * gridResolution] = resultDensity;
+		visualizationBuffer[x + y * width] = resultDensity;
 	}
 }
 
@@ -620,8 +623,6 @@ float* vorticityBuffer;
 float2 force;
 
 // visualization
-int width = gridResolution;
-int height = gridResolution;
 
 float4* visualizationBufferGPU;
 float4* visualizationBufferCPU;
@@ -629,7 +630,7 @@ float4* visualizationBufferCPU;
 int visualizationMethod = 1;
 
 // End of Buffers
-void addForce(int x, int y, float3 force);
+void addForce(int x, int y, float2 force);
 void resetSimulation();
 
 void initBuffers()
@@ -827,8 +828,8 @@ void visualizationStep()
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]->getTexture());*/
 
-	dim3 threadsPerBlockVisualization(8, 8);
-	dim3 numBlocksVisualization(gridResolution / threadsPerBlockVisualization.x, gridResolution / threadsPerBlockVisualization.y);
+	dim3 threadsPerBlockVisualization(32, 32);
+	dim3 numBlocksVisualization(width / threadsPerBlockVisualization.x, height / threadsPerBlockVisualization.y);
 		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]->getTexture(),
@@ -917,9 +918,9 @@ void keyDown(unsigned char key, int x, int y)
 	keysPressed[key] = true;
 
 	if (key == 'a')
-		rotation += 0.01f;
+		rotation += 0.03f;
 	else if (key == 'd')
-		rotation -= 0.01f;
+		rotation -= 0.03f;
 }
 
 void keyUp(unsigned char key, int x, int y)
