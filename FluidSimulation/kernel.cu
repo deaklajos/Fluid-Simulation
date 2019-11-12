@@ -26,6 +26,7 @@ cudaChannelFormatDesc desc_float = cudaCreateChannelDesc<float>();
 cudaChannelFormatDesc desc_float2 = cudaCreateChannelDesc<float2>();
 cudaChannelFormatDesc desc_float4 = cudaCreateChannelDesc<float4>();
 
+// TODO make this into a define or constexpr
 __constant__ float dt = 0.1f;
 __device__ int cnt = 0;
 
@@ -549,7 +550,7 @@ TextureSurface3D* pressureBuffer[2];
 TextureSurface3D* divergenceBuffer;
 float* vorticityBuffer;
 
-float2 force;
+float3 force;
 
 // visualization
 int width = gridResolution;
@@ -873,8 +874,9 @@ void mouseMove(int x, int y)
 {
 	force.x = (float)(x - mX);
 	force.y = -(float)(y - mY);
+	force.z = 0.0f;
 	//addForce(mX, height - mY, force); //old
-	//addForce(height / 2, width / 2, force);
+	addForce(height / 2, width / 2, force);
 	mX = x;
 	mY = y;
 }
