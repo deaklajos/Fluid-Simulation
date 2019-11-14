@@ -970,9 +970,9 @@ void keyDown(unsigned char key, int x, int y)
 {
 	keysPressed[key] = true;
 
-	if (key == 'a')
+	if (key == 'q')
 		rotation += 0.03f;
-	else if (key == 'd')
+	else if (key == 'e')
 		rotation -= 0.03f;
 }
 
