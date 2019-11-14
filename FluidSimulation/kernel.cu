@@ -547,6 +547,7 @@ void visualizationDensity3D(
 			resultDensity += tex3D<float4>(densityBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
 		}
 		visualizationBuffer[x + y * width] = resultDensity;
+		//visualizationBuffer[x + y * width] = 125;
 	}
 }
 
@@ -692,7 +693,7 @@ void initBuffers()
 	checkCudaErrors(cudaMallocHost(&visualizationBufferCPU, sizeof(float4) * width * height));
 	checkCudaErrors(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
 
-	visualizationBuffer = new GLInteropArray(gridResolution, gridResolution);
+	visualizationBuffer = new GLInteropArray(width, height);
 
 	resetSimulation();
 }
@@ -870,54 +871,63 @@ void visualizationStep()
 		/*visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]->getTexture());*/
-	
+		visualizationBuffer->map();
+
 		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
-			visualizationBufferGPU,
+			visualizationBuffer->getDataPointer(),
 			densityBuffer[inputDensityBuffer]->getTexture(),
 			point,
 			lookDirection,
 			lookUp,
 			lookRight);
-
 		checkCudaErrors(cudaPeekAtLastError());
+
+		visualizationBuffer->unmap();
+		
 		break;
 
 	case 1:
 	//	visualizationVelocity KERNEL_CALL(numBlocks, threadsPerBlock)(
 	//		visualizationBufferGPU,
 	//		velocityBuffer[inputVelocityBuffer]->getTexture());
+		visualizationBuffer->map();
 
 		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
-			visualizationBufferGPU,
+			visualizationBuffer->getDataPointer(),
 			velocityBuffer[inputVelocityBuffer]->getTexture(),
 			point,
 			lookDirection,
 			lookUp,
 			lookRight);
-
 		checkCudaErrors(cudaPeekAtLastError());
+
+		visualizationBuffer->unmap();
+
 		break;
 
 	case 2:
 	//	visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(
 	//		visualizationBufferGPU,
 	//		pressureBuffer[inputPressureBuffer]->getTexture());
+		visualizationBuffer->map();
 
 		visualizationPressure3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
-			visualizationBufferGPU,
+			visualizationBuffer->getDataPointer(),
 			pressureBuffer[inputPressureBuffer]->getTexture(),
 			point,
 			lookDirection,
 			lookUp,
 			lookRight);
-
 		checkCudaErrors(cudaPeekAtLastError());
+
+		visualizationBuffer->unmap();
+
 		break;
 	}
 
-	checkCudaErrors(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
+	//checkCudaErrors(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
 
-	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, visualizationBufferCPU);
+	//glDrawPixels(width, height, GL_RGBA, GL_FLOAT, visualizationBufferCPU);
 }
 
 // OpenGL
@@ -950,19 +960,34 @@ void initOpenGL()
 
 void display()
 {
+	// PERFORMANCE CHECKS
 	/*static int i = 0;
 	if(++i > 100)
 		glutLeaveMainLoop();*/
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glDisable(GL_DEPTH_TEST);
-
 	//addForce(gridResolution / 2, gridResolution / 2, make_float3(1, 1, 1));
+
+
 	simulationStep();
 	visualizationStep();
 
-	glEnable(GL_DEPTH_TEST);
+	// display results
+	glClear(GL_COLOR_BUFFER_BIT);
+	glutReportErrors();
+
+	// draw image from PBO
+	glDisable(GL_DEPTH_TEST);
+	glutReportErrors();
+	glRasterPos2i(0, 0);
+	glutReportErrors();
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, visualizationBuffer->getVBO());
+	glutReportErrors();
+	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, 0);
+	glutReportErrors();
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+
 	glutSwapBuffers();
+	glutReportErrors();
 }
 
 void idle()
@@ -1047,11 +1072,19 @@ void mouseMove(int x, int y)
 	mY = y;
 }
 
-void reshape(int newWidth, int newHeight)
+void reshape(int x, int y)
 {
 	/*width = newWidth;
 	height = newHeight;
 	glViewport(0, 0, width, height);*/
+	glViewport(0, 0, x, y);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0); // could fix this up?
 }
 
 int main(int argc, char* argv[])

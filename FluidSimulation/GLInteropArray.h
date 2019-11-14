@@ -11,10 +11,12 @@ public:
 	~GLInteropArray();
 	GLuint getVBO();
 	float4* getDataPointer();
+	void map();
+	void unmap();
 
 private:
 	GLuint vbo;
-	float4* dataPointer;
+	float4* dataPointer = nullptr;
 	struct cudaGraphicsResource* cuda_vbo_resource;
 };
 

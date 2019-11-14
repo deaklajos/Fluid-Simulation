@@ -12,28 +12,15 @@
 
 GLInteropArray::GLInteropArray(unsigned int width, unsigned int height)
 {
-	//assert(&vbo);
-
-	// create buffer object
+	// create pixel buffer object
 	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-	// initialize buffer object
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, vbo);
 	unsigned int size = width * height * 4 * sizeof(float);
-	glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 	// register this buffer object with CUDA
 	checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_vbo_resource, vbo, cudaGraphicsMapFlagsWriteDiscard));
-
-	SDK_CHECK_ERROR_GL();
-
-	// map OpenGL buffer object for writing from CUDA
-	checkCudaErrors(cudaGraphicsMapResources(1, &cuda_vbo_resource, 0));
-	size_t num_bytes;
-	checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&dataPointer, &num_bytes,
-		cuda_vbo_resource));
 }
 
 GLInteropArray::~GLInteropArray()
@@ -55,4 +42,16 @@ GLuint GLInteropArray::getVBO()
 float4* GLInteropArray::getDataPointer()
 {
 	return dataPointer;
+}
+
+void GLInteropArray::map()
+{
+	checkCudaErrors(cudaGraphicsMapResources(1, &cuda_vbo_resource, 0));
+	size_t num_bytes;
+	checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&dataPointer, &num_bytes, cuda_vbo_resource));
+}
+
+void GLInteropArray::unmap()
+{
+	checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vbo_resource, 0));
 }
