@@ -598,6 +598,43 @@ void visualizationPressure(float4* visualizationBuffer, cudaTextureObject_t pres
 	}
 }
 
+__global__
+void visualizationPressure3D(
+	float4* visualizationBuffer,
+	cudaTextureObject_t pressureBuffer,
+	float3 lookPoint,
+	float3 lookDirection,
+	float3 lookUp,
+	float3 lookRight)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < width && y < height)
+	{
+		const float cameraSize = 1.0f;
+		float right = (((float)(x + 1) / width) - 0.5f) * cameraSize;
+		float up = (((float)(y + 1) / height) - 0.5f) * cameraSize;
+		float3 thispoint = lookPoint + lookUp * up + lookRight * right;
+
+		float3 boxMin{ 0.0f, 0.0f, 0.0f };
+		float3 boxMax{ 1.0f, 1.0f, 1.0f };
+
+		float nearIntersection;
+		float farIntersection;
+
+		bool isHit = rayBoxIntersect(thispoint, lookDirection, boxMin, boxMax, nearIntersection, farIntersection);
+
+		float resultPressure = 0.0f;
+		for (float i = nearIntersection; i < farIntersection; i += (1.0f / gridResolution))
+		{
+			float3 pointInBox = thispoint + lookDirection * i;
+			resultPressure += tex3D<float>(pressureBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
+		}
+		visualizationBuffer[x + y * width] = make_float4(resultPressure);
+	}
+}
+
 // End of kernels
 
 // Buffers
@@ -627,7 +664,7 @@ float2 force;
 float4* visualizationBufferGPU;
 float4* visualizationBufferCPU;
 
-int visualizationMethod = 1;
+int visualizationMethod = 0;
 
 // End of Buffers
 void addForce(int x, int y, float2 force);
@@ -820,16 +857,16 @@ void visualizationStep()
 	lookRight.x = startLookRight.x * cosf(rotation) - startLookRight.y * sinf(rotation);
 	lookRight.y = startLookRight.x * sinf(rotation) + startLookRight.y * cosf(rotation);
 
+	dim3 threadsPerBlockVisualization(32, 32);
+	dim3 numBlocksVisualization(width / threadsPerBlockVisualization.x, height / threadsPerBlockVisualization.y);
 
-	//switch (visualizationMethod)
-	//{
-	//case 0:
+	switch (visualizationMethod)
+	{
+	case 0:
 		/*visualizationDensity KERNEL_CALL(numBlocks, threadsPerBlock)(
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]->getTexture());*/
-
-	dim3 threadsPerBlockVisualization(32, 32);
-	dim3 numBlocksVisualization(width / threadsPerBlockVisualization.x, height / threadsPerBlockVisualization.y);
+	
 		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
 			visualizationBufferGPU,
 			densityBuffer[inputDensityBuffer]->getTexture(),
@@ -839,24 +876,40 @@ void visualizationStep()
 			lookRight);
 
 		checkCudaErrors(cudaPeekAtLastError());
-	//	break;
+		break;
 
-	//case 1:
+	case 1:
 	//	visualizationVelocity KERNEL_CALL(numBlocks, threadsPerBlock)(
 	//		visualizationBufferGPU,
 	//		velocityBuffer[inputVelocityBuffer]->getTexture());
 
-	//	checkCudaErrors(cudaPeekAtLastError());
-	//	break;
+		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
+			visualizationBufferGPU,
+			velocityBuffer[inputVelocityBuffer]->getTexture(),
+			point,
+			lookDirection,
+			lookUp,
+			lookRight);
 
-	//case 2:
+		checkCudaErrors(cudaPeekAtLastError());
+		break;
+
+	case 2:
 	//	visualizationPressure KERNEL_CALL(numBlocks, threadsPerBlock)(
 	//		visualizationBufferGPU,
 	//		pressureBuffer[inputPressureBuffer]->getTexture());
 
-	//	checkCudaErrors(cudaPeekAtLastError());
-	//	break;
-	//}
+		visualizationPressure3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
+			visualizationBufferGPU,
+			pressureBuffer[inputPressureBuffer]->getTexture(),
+			point,
+			lookDirection,
+			lookUp,
+			lookRight);
+
+		checkCudaErrors(cudaPeekAtLastError());
+		break;
+	}
 
 	checkCudaErrors(cudaMemcpy(visualizationBufferCPU, visualizationBufferGPU, sizeof(float4) * width * height, cudaMemcpyDeviceToHost));
 
