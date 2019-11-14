@@ -20,6 +20,7 @@
 #include "IntelliSenseErrorFixer.hpp"
 
 #include "TextureSurface3D.cuh"
+#include "GLInteropArray.h"
 
 // Kernels
 cudaChannelFormatDesc desc_float = cudaCreateChannelDesc<float>();
@@ -663,6 +664,7 @@ float2 force;
 
 float4* visualizationBufferGPU;
 float4* visualizationBufferCPU;
+GLInteropArray* visualizationBuffer;
 
 int visualizationMethod = 0;
 
@@ -689,6 +691,8 @@ void initBuffers()
 
 	checkCudaErrors(cudaMallocHost(&visualizationBufferCPU, sizeof(float4) * width * height));
 	checkCudaErrors(cudaMalloc(&visualizationBufferGPU, sizeof(float4) * width * height));
+
+	visualizationBuffer = new GLInteropArray(gridResolution, gridResolution);
 
 	resetSimulation();
 }
@@ -1092,6 +1096,8 @@ int main(int argc, char* argv[])
 	checkCudaErrors(cudaFree(vorticityBuffer));
 	checkCudaErrors(cudaFree(visualizationBufferGPU));
 	checkCudaErrors(cudaFreeHost(visualizationBufferCPU));
+
+	delete visualizationBuffer;
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.

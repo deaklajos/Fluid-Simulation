@@ -89,8 +89,12 @@
     <CudaCompile Include="TextureSurface3D.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="GLInteropArray.h" />
     <ClInclude Include="IntelliSenseErrorFixer.hpp" />
     <ClInclude Include="TextureSurface3D.cuh" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="GLInteropArray.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
