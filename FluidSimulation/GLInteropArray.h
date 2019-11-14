@@ -9,13 +9,15 @@ class GLInteropArray
 public:
 	GLInteropArray(unsigned int width, unsigned int height);
 	~GLInteropArray();
-	GLuint getVBO();
+	GLuint getPBO();
+	GLuint getTexture();
 	float4* getDataPointer();
 	void map();
 	void unmap();
 
 private:
-	GLuint vbo;
+	GLuint pbo;
+	GLuint texture;
 	float4* dataPointer = nullptr;
 	struct cudaGraphicsResource* cuda_vbo_resource;
 };

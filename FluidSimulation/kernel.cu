@@ -973,18 +973,21 @@ void display()
 
 	// display results
 	glClear(GL_COLOR_BUFFER_BIT);
-	glutReportErrors();
 
 	// draw image from PBO
 	glDisable(GL_DEPTH_TEST);
-	glutReportErrors();
-	glRasterPos2i(0, 0);
-	glutReportErrors();
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, visualizationBuffer->getVBO());
-	glutReportErrors();
-	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, 0);
-	glutReportErrors();
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+
+	visualizationBuffer->getTexture();
+	glBegin(GL_QUADS); 
+	glTexCoord2f(0, 0);
+	glVertex3f(0, 0, 0); 
+	glTexCoord2f(0, 1.0f);
+	glVertex3f(0, 1.0f, 0); 
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex3f(1.0f, 1.0f, 0); 
+	glTexCoord2f(1.0f, 0);
+	glVertex3f(1.0f, 0, 0); 
+	glEnd();
 
 	glutSwapBuffers();
 	glutReportErrors();
