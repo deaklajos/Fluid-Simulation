@@ -355,34 +355,34 @@ void pressureJacobi(cudaTextureObject_t inputPressureBuffer, cudaSurfaceObject_t
 		if (x == 0)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x + 1 + 0.5f, y + 0.5f, z + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 		else if (x == gridResolution - 1)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x - 1 + 0.5f, y + 0.5f, z + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 
 		if (y == 0)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 1 + 0.5f, z + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 		else if (y == gridResolution - 1)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y - 1 + 0.5f, z + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 
 		if (z == 0)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z + 1 + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 		else if (z == gridResolution - 1)
 		{
 			const float element = tex3D<float>(inputPressureBuffer, x + 0.5f, y + 0.5f, z - 1 + 0.5f);
-			surf3Dwrite(-element, outputPressureBuffer, x * sizeof(float), y, z);
+			surf3Dwrite(element, outputPressureBuffer, x * sizeof(float), y, z);
 		}
 	}
 }
