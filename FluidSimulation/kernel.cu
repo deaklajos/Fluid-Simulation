@@ -547,7 +547,44 @@ void visualizationDensity3D(
 			resultDensity += tex3D<float4>(densityBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
 		}
 		visualizationBuffer[x + y * width] = resultDensity;
-		//visualizationBuffer[x + y * width] = 125;
+	}
+}
+
+
+__global__
+void visualizationVelocity3D(
+	float4* visualizationBuffer,
+	cudaTextureObject_t velocityBuffer,
+	float3 lookPoint,
+	float3 lookDirection,
+	float3 lookUp,
+	float3 lookRight)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < width && y < height)
+	{
+		const float cameraSize = 1.0f;
+		float right = (((float)(x + 1) / width) - 0.5f) * cameraSize;
+		float up = (((float)(y + 1) / height) - 0.5f) * cameraSize;
+		float3 thispoint = lookPoint + lookUp * up + lookRight * right;
+
+		float3 boxMin{ 0.0f, 0.0f, 0.0f };
+		float3 boxMax{ 1.0f, 1.0f, 1.0f };
+
+		float nearIntersection;
+		float farIntersection;
+
+		bool isHit = rayBoxIntersect(thispoint, lookDirection, boxMin, boxMax, nearIntersection, farIntersection);
+
+		float4 resultVelocity = make_float4(0.0f);
+		for (float i = nearIntersection; i < farIntersection; i += (1.0f / gridResolution))
+		{
+			float3 pointInBox = thispoint + lookDirection * i;
+			resultVelocity += tex3D<float4>(velocityBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
+		}
+		visualizationBuffer[x + y * width] = (resultVelocity + 1.0f) / 2.0f;
 	}
 }
 
@@ -633,7 +670,7 @@ void visualizationPressure3D(
 			float3 pointInBox = thispoint + lookDirection * i;
 			resultPressure += tex3D<float>(pressureBuffer, pointInBox.x * gridResolution + 0.5f, pointInBox.y * gridResolution + 0.5f, pointInBox.z * gridResolution + 0.5f);
 		}
-		visualizationBuffer[x + y * width] = make_float4(resultPressure);
+		visualizationBuffer[x + y * width] = make_float4((resultPressure + 1.0f) / 2.0f);
 	}
 }
 
@@ -892,7 +929,7 @@ void visualizationStep()
 	//		velocityBuffer[inputVelocityBuffer]->getTexture());
 		visualizationBuffer->map();
 
-		visualizationDensity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
+		visualizationVelocity3D KERNEL_CALL(threadsPerBlockVisualization, numBlocksVisualization)(
 			visualizationBuffer->getDataPointer(),
 			velocityBuffer[inputVelocityBuffer]->getTexture(),
 			point,
